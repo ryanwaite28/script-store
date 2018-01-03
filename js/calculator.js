@@ -1,3 +1,14 @@
+/*
+
+  A simple calculator script.
+
+  usage:
+
+  var values = [1,2,3,4,5]; // the order of values matters!
+  var add_values = calc(values, OPERATOR_ADD); // returns 15
+
+*/
+
 const OPERATOR_ADD                   = "OPERATOR_ADD";
 const OPERATOR_SUBTRACT              = "OPERATOR_SUBTRACT";
 const OPERATOR_MULTIPLY              = "OPERATOR_PLUS";
@@ -54,5 +65,5 @@ const eval_exp = function(expression) {
   if(typeof(expression) !== 'string') { return }
 
   let value = eval(expression);
-  return value;
+  return value || null;
 }
