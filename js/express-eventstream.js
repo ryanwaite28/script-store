@@ -20,7 +20,7 @@ const Stream = function() {
         "data: " + JSON.stringify(data) +
         "\n\n";
 
-        console.log(id, event, data, stream);
+        // console.log(id, event, data, stream);
 
         res.write(stream);
       }
