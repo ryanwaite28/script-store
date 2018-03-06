@@ -13,7 +13,7 @@ function getFileInfo(id) {
 			});
 		}
 
-		let input = document.getElementById("testfile");
+		let input = document.getElementById(id);
 		if (!input.files[0]) {
 			return reject({
 				error: true,
