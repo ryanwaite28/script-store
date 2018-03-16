@@ -29,6 +29,12 @@ const Stream = function() {
     }
   }
 
+  self.add = function(request, response) {
+    response.sseSetup();
+    var ip = String(request.ip);
+    self.connections[ip] = response;
+  }.bind(self);
+
   self.push_sse = function(id, type, obj) {
     Object.keys(self.connections).forEach(function(key){
       self.connections[key].sseSend(id, type, obj);
@@ -38,23 +44,17 @@ const Stream = function() {
 }
 
 /*
-
   Usage:
   ---
-
   const express = require('express');
   const Stream = require('./express-eventstream');
-
 
   const app = express();
   const stream = new Stream();
   app.use(stream.enable());
 
-
   app.get('/stream', function(request, response) {
-    response.sseSetup();
-    var ip = String(request.ip);
-    stream.connections[ip] = response;
+    stream.add(request, response);
     stream.push_sse(1, "opened", { msg: 'connection opened!' });
   });
 
@@ -62,7 +62,6 @@ const Stream = function() {
     stream.push_sse(2, "new_event", { event: true });
     return response.json({ msg: 'admit one' });
   });
-
 */
 
 module.exports = Stream;
