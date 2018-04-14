@@ -1,0 +1,9 @@
+.responsive-ul-1 {
+  list-style: none;
+  margin: 0;
+  padding: 30px 15px;
+  text-align: center;
+  display: flex;
+  flex-flow: row wrap;
+  justify-content: center;
+}
