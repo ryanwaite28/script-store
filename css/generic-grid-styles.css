@@ -1,0 +1,76 @@
+.container {
+  width: 1000px;
+  max-width: 100%;
+  display: block;
+  margin: auto;
+}
+
+.row {
+  width: 100%;
+  overflow: hidden;
+}
+
+.row > div.col {
+  float: left;
+}
+.row > div.col > div:first-child {
+  padding: 10px;
+}
+
+.row > div.s1 {
+  width: 8.33%;
+}
+.row > div.s2 {
+  width: 16.67%;
+}
+.row > div.s3 {
+  width: 25%;
+}
+.row > div.s4 {
+  width: 33.33%;
+}
+.row > div.s5 {
+  width: 41.67%;
+}
+.row > div.s6 {
+  width: 50%;
+}
+.row > div.s7 {
+  width: 58.33;
+}
+.row > div.s8 {
+  width: 66.67;
+}
+.row > div.s9 {
+  width: 75%;
+}
+.row > div.s10 {
+  width: 83.33;
+}
+.row > div.s11 {
+  width: 91.67%;
+}
+.row > div.s12 {
+  width: 100%;
+}
+
+@media screen and (max-width: 992px) {
+  .row > div.col.lg {
+    float: none;
+    width: 100%;
+  }
+}
+
+@media screen and (max-width: 768px) {
+  .row > div.col.md {
+    float: none;
+    width: 100%;
+  }
+}
+
+@media screen and (max-width: 524px) {
+  .row > div.col.sm {
+    float: none;
+    width: 100%;
+  }
+}
