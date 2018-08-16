@@ -5,16 +5,16 @@
 
   let watch = new StopWatch();
 
-                                   // starts the watch timer
+  // starts the watch timer
   watch.startTimer(function(){
-    // you can even run a callback
-    // for each interval, like updating the DOM!
+    // you can even run a callback for each interval, like updating the DOM!
   });
 
   watch.stopTimer();              // stops the watch timer
   watch.resetTimer();             // resets the watch timer
   watch.getTimeString();          // returns the time as a string like so ---> "00:01:17"
-
+  watch.getTimeObj();             // returns an object like this ---> { hours: 0, minutes: 4, seconds: 27 }
+  watch.getTimeObjFormatted();    // returns an object like this ---> { hours: '00', minutes: '04', seconds: '27' }
 
 */
 
@@ -29,7 +29,7 @@ const StopWatch = function StopWatch() {
   let on = false;
 
   self.startTimer = function(callback) {
-    if(on === true) { return; }
+    if(on === true) { console.log('timer is already on.'); return; }
     on = true;
     timer = setInterval(function(){
       seconds++;
@@ -69,6 +69,22 @@ const StopWatch = function StopWatch() {
     return timeString;
   }
 
+  self.getTimeObj = function() {
+    return {
+      hours: hours,
+      minutes: minutes,
+      seconds: seconds
+    };
+  }
+  
+  self.getTimeObjFormatted = function() {
+    return {
+      hours: hours > 9 ? String(hours) : '0' + String(hours),
+      minutes: minutes > 9 ? String(minutes) : '0' + String(minutes),
+      seconds: seconds > 9 ? String(seconds) : '0' + String(seconds)
+    };
+  }
+  
   self.getHours = function() {
     return hours;
   }
