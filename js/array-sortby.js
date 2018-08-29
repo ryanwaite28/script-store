@@ -1,8 +1,12 @@
 /*
 
-  Example
-  ---
+  https://github.com/ryanwaite28/script-store/blob/master/js/array-sortby.js
+  https://ryanwaite28.github.io/script-store/js/array-sortby.js
   
+  ---
+
+  Example
+
   let people = [
     { name: 'John', age: 0 },
     { name: 'Jane', age: 0 },
