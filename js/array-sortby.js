@@ -1,3 +1,17 @@
+/*
+
+  Example
+  ---
+  
+  let people = [
+    { name: 'John', age: 0 },
+    { name: 'Jane', age: 0 },
+  ];
+  
+  people.sortBy("name", "asc");
+
+*/
+
 Array.prototype.sortBy = function(property, direction) {
   let tempArray = this;
   tempArray.sort(function(a, b){
