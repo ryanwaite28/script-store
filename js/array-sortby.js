@@ -26,8 +26,8 @@ Array.prototype.sortBy = function(property, direction) {
         return 0;
       case "desc":
         // desc
-        if (x < y) {return -1;}
-        if (x > y) {return 1;}
+        if (x > y) {return -1;}
+        if (x < y) {return 1;}
         return 0;
       default:
         // asc
