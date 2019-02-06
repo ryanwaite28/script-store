@@ -17,7 +17,7 @@
 */
 
 Array.prototype.sortBy = function(property, direction) {
-  let tempArray = this;
+  let tempArray = [...this];
   tempArray.sort(function(a, b){
     var x = a[property].constructor === String && a[property].toLowerCase() || a[property];
     var y = b[property].constructor === String && b[property].toLowerCase() || b[property];
