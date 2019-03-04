@@ -16,11 +16,19 @@
 
 */
 
-Array.prototype.sortBy = function(property, direction) {
+
+
+Array.prototype.sortBy = function(property, direction, isDateString) {
   let tempArray = [...this];
   tempArray.sort(function(a, b){
-    var x = a[property].constructor === String && a[property].toLowerCase() || a[property];
-    var y = b[property].constructor === String && b[property].toLowerCase() || b[property];
+    let x, y;
+    if(isDateString === true) {
+      x = new Date(a[property]);
+      y = new Date(b[property]);
+    } else {
+      x = a[property].constructor === String && a[property].toLowerCase() || a[property];
+      y = b[property].constructor === String && b[property].toLowerCase() || b[property];
+    }
     let value = direction && String(direction) || "asc";
     switch(value) {
       case "asc":
