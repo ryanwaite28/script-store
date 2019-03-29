@@ -5,7 +5,7 @@ const ArrayPaginator = function ArrayPaginator(arrayObject) {
   let startIndex = 0;
   let sectionSize = 10;
   let page = 1;
-  let pages = copyArrayObject.length / sectionSize;
+  let pages = Math.floor(copyArrayObject.length / sectionSize);
   let currentSection = copyArrayObject.slice(startIndex, (startIndex + sectionSize));
   let filterFn;
   let sortFn;
@@ -28,14 +28,14 @@ const ArrayPaginator = function ArrayPaginator(arrayObject) {
     startIndex = 0;
     sectionSize = 10;
     page = 1;
-    pages = arrayObject.length / sectionSize;
+    pages = Math.floor(copyArrayObject.length / sectionSize);
   }
 
   self.setSize = function(size) {
     sectionSize = size;
     startIndex = 0;
     page = 1;
-    pages = arrayObject.length / sectionSize;
+    pages = Math.floor(copyArrayObject.length / sectionSize);
     currentSection = self.getCurrentSection();
   }
 
