@@ -54,8 +54,8 @@ const ArrayPaginator = function ArrayPaginator(arrayObject) {
 
   self.setNext = function() {
     if(page === pages) { return; }
-    page = page - 1;
-    startIndex = startIndex - sectionSize;
+    page = page + 1;
+    startIndex = startIndex + sectionSize;
     currentSection = self.getCurrentSection();
   }
 
