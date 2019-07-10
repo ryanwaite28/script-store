@@ -212,7 +212,7 @@ const action = new LoginAction({
 appStore.dispatch(action);
 ```
 
-Many store can be created with this approach. When that happens, it may be helpful to consolidate all of the stores into one place:
+Many stores can be created with this approach. When that happens, it may be helpful to consolidate all of the stores into one place:
 ```typescript
 /* 
   all-stores.ts 
