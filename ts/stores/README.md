@@ -185,7 +185,7 @@ export class AppStore {
 
 ## Usage
 
-Once everything is define, just create a new instance of the store class:
+Once everything is defined, just create a new instance of the store class:
 ```typescript
 const appStore = new AppStore();
 ```
