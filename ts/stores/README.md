@@ -165,7 +165,7 @@ export class AppStore {
     // update the state of the store
     this.state = newState;
     // emit a new event to all subscribers with the new state
-    this.eventSubject.next(newState);
+    this.eventSubject.next(this.getState());
   }
 
   getState() {
