@@ -12,7 +12,7 @@ def genPrimes():
 
         return True
 
-    prime = 1
+    prime = 2
     while True:
         yield prime
         prime += 1
@@ -21,6 +21,6 @@ def genPrimes():
 
         if check_prime == False:
             while check_prime == False:
-                print('not yet prime:', prime)
+                # print('not yet prime:', prime)
                 prime += 1
                 check_prime = is_prime(prime)
