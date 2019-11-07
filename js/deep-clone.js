@@ -36,23 +36,28 @@ function deepClone (value) {
 
   let clone;
 
-  if (value.constructor === Object) {
-    clone = { ...value };
-    clone.constructor = value.constructor;
-    Object.keys(clone).forEach((key) => {
-      const isObjOrArr = checkObjOrArr(clone[key]);
-      clone[key] = isObjOrArr ? deepClone(clone[key]) : cloneValue(clone[key]);
-    });
-  } else if (value.constructor === Array) {
-    clone = [ ...value ];
-    clone.constructor = value.constructor;
-    for (let i = 0; i < clone.length; i++) {
-      const isObjOrArr = checkObjOrArr(clone[i]);
-      clone[i] = isObjOrArr ? deepClone(clone[i]) : cloneValue(clone[i]);
+  try {
+    if (value.constructor === Object) {
+      clone = { ...value };
+      clone.constructor = value.constructor;
+      Object.keys(clone).forEach((key) => {
+        const isObjOrArr = checkObjOrArr(clone[key]);
+        clone[key] = isObjOrArr ? deepClone(clone[key]) : cloneValue(clone[key]);
+      });
+    } else if (value.constructor === Array) {
+      clone = [ ...value ];
+      clone.constructor = value.constructor;
+      for (let i = 0; i < clone.length; i++) {
+        const isObjOrArr = checkObjOrArr(clone[i]);
+        clone[i] = isObjOrArr ? deepClone(clone[i]) : cloneValue(clone[i]);
+      }
+    } else {
+      return cloneValue(value);
     }
-  } else {
-    return cloneValue(value);
-  }
 
-  return clone;
+    return clone;
+  } catch (e) {
+    console.log(e);
+    return value;
+  }
 };
