@@ -14,18 +14,23 @@ function deepClone (value) {
   }
 
   const cloneValue = (i) => {
-    switch (i.constructor) {
-      case Date:
-      case Map:
-      case WeakMap:
-      case Set:
-      case WeakSet: {
-        return new i.constructor(i);
+    try {
+      switch (i.constructor) {
+        case Date:
+        case Map:
+        case WeakMap:
+        case Set:
+        case WeakSet: {
+          return new i.constructor(i);
+        }
+        default: {
+          // if primitive, just return it
+          return i;
+        }
       }
-      default: {
-        // if primitive, just return it
-        return i;
-      }
+    } catch (e) {
+      console.log(e);
+      return i;
     }
   }
 
