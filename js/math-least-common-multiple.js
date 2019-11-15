@@ -15,9 +15,20 @@ function lcm(numList) {
   // use the smallest number to start
   const firstNum = numList[0];
 
-  // check the smallest number against the rest.
-  // we'll create a helper method for recursive calling
+  // check the smallest number against the numbers in the list.
+  // we'll create a helper method for recursive calling.
   const checkLCM = (n, list) => {
+    /**
+     * if none of the numbers in the list has a remainder
+     * after the division of `n`, then `n` is the
+     * least common factor; return `n`.
+     * 
+     * if at least one of the numbers in the list has a remainder
+     * after the division of `n` , then `n` cannot be
+     * the least common multiple;
+     * call `checkLCM` again with `n - 1`  recursively until
+     * the least common multiple is found -- in worst case, would be 1.
+     */
     for (let num of numList) {
       const thereIsARemainder = num % n !== 0;
       if (thereIsARemainder) {
