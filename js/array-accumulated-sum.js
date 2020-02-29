@@ -16,7 +16,7 @@ function accumulatedSum(arr) {
   for (let i = 0; i < arr.length; i++) {
 	  let currentVal = prevVal + arr[i];
 	  tempArr.push(currentVal);
-    prevVal = currentVal;
+    	  prevVal = currentVal;
   }
   return tempArr;
 }
