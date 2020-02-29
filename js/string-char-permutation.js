@@ -31,8 +31,8 @@ function permutateString(
 
   for (let permChar of permChars) {
     let newStr = str.replace(char, permChar);
-    const stillHasCar = newStr.includes(char);
-    if (stillHasCar) {
+    const stillHasChar = newStr.includes(char);
+    if (stillHasChar) {
       const newPermList = permutateString(newStr, char, permChars);
       listOfPermutations.push(...newPermList);
     } else {
