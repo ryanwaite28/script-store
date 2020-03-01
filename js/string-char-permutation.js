@@ -40,8 +40,8 @@ function permutateString(
     return [];
   }
 
-  const doesNotHaveChar = !str.includes(char);
-  if (doesNotHaveChar) {
+  const strDoesNotHaveChar = !str.includes(char);
+  if (strDoesNotHaveChar) {
     console.warn('str does not have characters to permutate...');
     return [str];
   } else if (str === char) {
