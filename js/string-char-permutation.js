@@ -48,6 +48,11 @@ function permutateString(
     console.warn('str is same as character to convert; return given permutations...');
     return [...permChars];
   }
+  const charIsPermutation = permChars.includes(char);
+  if (charIsPermutation) {
+    console.warn('the char to be replaced cannot also be a permutation, otherwise an infinite loop would occur...');
+    return [];
+  }
 
   const listOfPermutations = [];
 
