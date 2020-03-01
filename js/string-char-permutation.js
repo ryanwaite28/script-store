@@ -42,3 +42,16 @@ function permutateString(
 
   return listOfPermutations;
 }
+
+function testListUnique (list) {
+  const map = new Map();
+  for (const i of list) {
+    const hasSeen = map.has(i);
+    if (hasSeen) {
+      return false;
+    } else {
+      map.set(i, i);
+    }
+  }
+  return true;
+}
