@@ -19,11 +19,33 @@ function permutateString(
   char,
   permChars
 ) {
-  // if there are no question marks, return
+  if (!str) {
+    console.warn('str has no value...');
+    return [];
+  }
+  if (typeof(str) !== 'string') {
+    console.warn('str argument is not of type "string"...');
+    return [];
+  }
+  if (!char) {
+    console.warn('char has no value...');
+    return [];
+  }
+  if (!permChars) {
+    console.warn('permChars has no value...');
+    return [];
+  }
+  if (!permChars.length) {
+    console.warn('permChars has no items...');
+    return [];
+  }
+
   const doesNotHaveChar = !str.includes(char);
   if (doesNotHaveChar) {
+    console.warn('str does not have characters to permutate...');
     return [str];
   } else if (str === char) {
+    console.warn('str is same as character to convert; return given permutations...');
     return [...permChars];
   }
 
