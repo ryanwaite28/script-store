@@ -155,7 +155,7 @@ import {{ AwsS3Service, AwsS3UploadResults }} from "../../services/s3.aws.servic
 import {{ s3_objects_repo }} from "../s3-objects/s3-objects.repository";
 import {{ ModelTypes }} from "../../lib/constants/model-types.enum";
 import {{ readFile }} from "fs/promises";
-import {{ S3Objects }} from "../../app.database";
+import {{ S3Objects }} from '@app/backend';
 import {{ Includeable, col, literal }} from "sequelize";
 import {{ {snake_name_plural}_repo }} from "./{kebob_name_plural}.repository";
 
@@ -194,7 +194,7 @@ import {{
   {model_name}Entity,
 }} from "@app/shared";
 import {{ sequelize_model_class_crud_to_entity_object }} from "../../lib/utils/sequelize.utils";
-import {{ {model_name_plural} }} from "../../app.database";
+import {{ {model_name_plural} }} from '@app/backend';
 
 
 export const {snake_name_plural}_repo = sequelize_model_class_crud_to_entity_object<{model_name}Entity>({model_name_plural});
@@ -204,6 +204,9 @@ export const {snake_name_plural}_repo = sequelize_model_class_crud_to_entity_obj
     
   with open(Path(f"{base_path}/{kebob_name_plural}/dto/{kebob_name_plural}.create.dto.ts"), 'w') as f:
     f.write(f'''\
+import {{
+  {model_name}Entity,
+}} from "@app/shared";
 import {{
   IsBoolean,
   IsEmail,
@@ -218,7 +221,7 @@ import {{
 }} from 'class-validator';
 
 
-export class Create{model_name}Dto {{
+export class Create{model_name}Dto implements Partial<{model_name}Entity> {{
   
   
 
@@ -231,6 +234,9 @@ export class Create{model_name}Dto {{
   with open(Path(f"{base_path}/{kebob_name_plural}/dto/{kebob_name_plural}.update.dto.ts"), 'w') as f:
     f.write(f'''\
 import {{
+  {model_name}Entity,
+}} from "@app/shared";
+import {{
   IsBoolean,
   IsEmail,
   IsIn,
@@ -244,7 +250,7 @@ import {{
 }} from 'class-validator';
 
 
-export class Update{model_name}Dto {{
+export class Update{model_name}Dto implements Partial<{model_name}Entity> {{
   
   
 
@@ -350,7 +356,7 @@ def convert_model_to_interface(
   
 def run():
   
-  use_models_file_path = "src/apps/app-server/src/app.database.ts"
+  use_models_file_path = "src/libs/backend/src/lib/app.database.ts"
   
   use_interfaces_file_path = "src/libs/shared/src/lib/interfaces/models.interface.ts"
   
