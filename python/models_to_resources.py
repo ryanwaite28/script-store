@@ -95,11 +95,12 @@ import {{
 import {{ {model_name}Service }} from './{kebob_name_plural}.service';
 import {{ Create{model_name}Dto }} from "./dto/{kebob_name_plural}.create.dto";
 import {{ Update{model_name}Dto }} from "./dto/{kebob_name_plural}.update.dto";
-import {{ JwtUserAuthorized }} from '../../middlewares/jwt.middleware';
+import {{ JwtAuthorized }} from '../../middlewares/jwt.middleware';
 import {{ JwtUser }} from '../../decorators/jwt.decorator';
-import {{ UserEntity }} from '@app/shared';
+import {{ MapType, UserEntity }} from '@app/shared';
 import {{ FileUpload, FileUploadByName }} from '../../decorators/file-upload.decorator';
 import {{ UploadedFile }} from 'express-fileupload';
+
 
 
 
@@ -114,26 +115,38 @@ export class {model_name}Controller {{
   }}
 
   @Post('')
-  @UseBefore(JwtUserAuthorized)
-  signup(@JwtUser() user: UserEntity, @Body({{ validate: true }}) dto: Create{model_name}Dto) {{
-    return {model_name}Service.create{model_name}(user.id, dto);
+  @UseBefore(JwtAuthorized)
+  create{model_name}(
+    @JwtUser() user: UserEntity,
+    @Body({{ validate: true }}) dto: Create{model_name}Dto,
+    @FileUpload() files: MapType<UploadedFile>
+  ) {{
+    return {model_name}Service.create{model_name}(user.id, dto, files);
   }}
 
   @Put('/:id')
-  @UseBefore(JwtUserAuthorized)
-  put(@JwtUser() user: UserEntity, @Param('id') id: number, @Body({{ validate: true }}) dto: Update{model_name}Dto) {{
+  @UseBefore(JwtAuthorized)
+  update{model_name}(
+    @JwtUser() user: UserEntity,
+    @Param('id') id: number,
+    @Body({{ validate: true }}) dto: Update{model_name}Dto
+  ) {{
     return {model_name}Service.update{model_name}(user.id, id, dto);
   }}
 
   @Patch('/:id')
-  @UseBefore(JwtUserAuthorized)
-  patch(@JwtUser() user: UserEntity, @Param('id') id: number, @Body({{ validate: true }}) dto: Update{model_name}Dto) {{
+  @UseBefore(JwtAuthorized)
+  patch{model_name}(
+    @JwtUser() user: UserEntity,
+    @Param('id') id: number,
+    @Body({{ validate: true }}) dto: Update{model_name}Dto
+  ) {{
     return {model_name}Service.patch{model_name}(user.id, id, dto);
   }}
 
   @Delete('/:id')
-  @UseBefore(JwtUserAuthorized)
-  delete(@JwtUser() user: UserEntity, @Param('id') id: number) {{
+  @UseBefore(JwtAuthorized)
+  delete{model_name}(@JwtUser() user: UserEntity, @Param('id') id: number) {{
     return {model_name}Service.delete{model_name}(user.id, id);
   }}
         
@@ -146,6 +159,7 @@ import 'reflect-metadata';
 import {{
   HttpStatusCodes,
   UserEntity,
+  MapType,
 }} from "@app/shared";
 import {{ Create{model_name}Dto }} from "./dto/{kebob_name_plural}.create.dto";
 import {{ Update{model_name}Dto }} from "./dto/{kebob_name_plural}.update.dto";
@@ -169,7 +183,7 @@ export class {model_name}Service {{
     }});
   }}
   
-  static async create{model_name}(user_id: number, dto: Create{model_name}Dto) {{
+  static async create{model_name}(user_id: number, dto: Create{model_name}Dto, files?: MapType<UploadedFile>) {{
     
   }}
   
