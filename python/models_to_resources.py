@@ -24,7 +24,23 @@ def pluralize(s: str) -> str:
   else:
     return s + 's'
   
+def format_dto_fields(f: str) -> str:
+  decorated = (
+    '  ' + ('@IsOptional()' if ('| null' in f) else '@IsNotEmpty()') + '\n' + 
+    '  ' + ('@IsString()' if ('string' in f) else '@IsBoolean()' if ('boolean' in f) else '@IsInt()' if ('number' in f) else '') + '\n' +
+    f
+  )
+    
+  print ('decorated:', decorated)
+
+  return decorated
+
   
+  
+  
+user_owner_field_by_model = {}
+
+fields_by_model: dict[list[str]] = {}
   
   
 def create_resource(
@@ -93,6 +109,10 @@ import {{
 }} from 'routing-controllers';
 
 import {{ {model_name}Service }} from './{kebob_name_plural}.service';
+import {{
+  {model_name}Exists,
+  AuthUserOwns{model_name}
+}} from './{kebob_name_plural}.guard';
 import {{ Create{model_name}Dto }} from "./dto/{kebob_name_plural}.create.dto";
 import {{ Update{model_name}Dto }} from "./dto/{kebob_name_plural}.update.dto";
 import {{ JwtAuthorized }} from '../../middlewares/jwt.middleware';
@@ -146,11 +166,62 @@ export class {model_name}Controller {{
 
   @Delete('/:id')
   @UseBefore(JwtAuthorized)
-  delete{model_name}(@JwtUser() user: UserEntity, @Param('id') id: number) {{
+  delete{model_name}(
+    @JwtUser() user: UserEntity,
+    @Param('id') id: number
+  ) {{
     return {model_name}Service.delete{model_name}(user.id, id);
   }}
         
 }}''')
+    
+    
+  with open(Path(f"{base_path}/{kebob_name_plural}/{kebob_name_plural}.guard.ts"), 'w') as f:
+    f.write(f'''\
+import {{ NextFunction, Request, Response }} from 'express';
+import {{
+  HttpStatusCodes,
+  {model_name}Entity,
+}} from '@app/shared';
+import {{ {model_name_plural}Repo }} from "./{kebob_name_plural}.repository";
+
+
+
+export async function {model_name}Exists(
+  request: Request,
+  response: Response,
+  next: NextFunction
+) {{
+  const id = parseInt(request.params.id, 10);
+  const {model_var_name}: {model_name}Entity = await {model_name_plural}Repo.findOne({{ where: {{ id }} }});
+  if (!{model_var_name}) {{
+    return response.status(HttpStatusCodes.NOT_FOUND).json({{
+      message: `{model_name} does not exist by id: ${{ id }}`
+    }});
+  }}
+  response.locals.{model_var_name} = {model_var_name};
+  return next();
+}}
+
+export async function AuthUserOwns{model_name}(
+  request: Request,
+  response: Response,
+  next: NextFunction
+) {{
+  const {model_var_name} = response.locals.{model_var_name} as {model_name}Entity;
+  const isOwner = {model_var_name}.{user_owner_field_by_model.get(model_name, 'owner_id')} === request['auth'].id;
+  if (!isOwner) {{
+    return response.status(HttpStatusCodes.FORBIDDEN).json({{
+      message: `User is not owner of {model_name} by id: ${{ {model_var_name}.id }}`
+    }});
+  }}
+  return next();
+}}
+
+
+
+''')
+    
     
     
   with open(Path(f"{base_path}/{kebob_name_plural}/{kebob_name_plural}.service.ts"), 'w') as f:
@@ -171,14 +242,14 @@ import {{ ModelTypes }} from "../../lib/constants/model-types.enum";
 import {{ readFile }} from "fs/promises";
 import {{ S3Objects }} from '@app/backend';
 import {{ Includeable, col, literal }} from "sequelize";
-import {{ {snake_name_plural}_repo }} from "./{kebob_name_plural}.repository";
+import {{ {model_name_plural}Repo }} from "./{kebob_name_plural}.repository";
 
 
 
 export class {model_name}Service {{
 
   static async get{model_name}ById({snake_name}_id: number) {{
-    return {snake_name_plural}_repo.findOne({{
+    return {model_name_plural}Repo.findOne({{
       where: {{ id: {snake_name}_id }}
     }});
   }}
@@ -211,7 +282,7 @@ import {{ sequelize_model_class_crud_to_entity_object }} from "../../lib/utils/s
 import {{ {model_name_plural} }} from '@app/backend';
 
 
-export const {snake_name_plural}_repo = sequelize_model_class_crud_to_entity_object<{model_name}Entity>({model_name_plural});
+export const {model_name_plural}Repo = sequelize_model_class_crud_to_entity_object<{model_name}Entity>({model_name_plural});
         
 ''')
     
@@ -238,7 +309,7 @@ import {{
 export class Create{model_name}Dto implements Partial<{model_name}Entity> {{
   
   
-
+{'\n'.join([ format_dto_fields(f) for f in fields_by_model.get(model_name, []) ])}
 }}
 
         
@@ -267,7 +338,7 @@ import {{
 export class Update{model_name}Dto implements Partial<{model_name}Entity> {{
   
   
-
+{'\n'.join([ format_dto_fields(f) for f in fields_by_model.get(model_name, []) ])}
 }}
 
         
@@ -283,6 +354,9 @@ def convert_model_to_interface(
   models_file_path: str,
   interfaces_file_path: str = None
 ):
+  
+  global user_owner_field_by_model
+  global fields_by_model
   
   # file with sequelize models
   
@@ -323,6 +397,7 @@ def convert_model_to_interface(
       field_name_match = re.search("([a-zA-Z-0-9-_]+)", use_line)
       field_type_def_match = re.search("type: ", use_line)
       field_type_match = re.search("([A-Z]+)", use_line)
+      field_owner_match = re.search("references: { model: Users, key: 'id' }", use_line)
       if (field_name_match and not (field_name_match.group(1) == "id")) and field_type_match and field_type_def_match and is_in_interface:
         
         field_not_nullable_match = re.search("(allowNull: false)", use_line)
@@ -336,13 +411,20 @@ def convert_model_to_interface(
         if not field_not_nullable_match:
           use_type += " | null"
           
-        new_file_contents.append(f'''  {use_name}: {use_type};''')
-        new_file_contents.append('\n')
+        field_definition = f'''  {use_name}: {use_type};\n'''  
+        new_file_contents.append(field_definition)
+        
+        fields_by_model[model_name] = fields_by_model.get(model_name, [])
+        fields_by_model[model_name].append(field_definition)
+        
+        
+        if field_owner_match:
+          user_owner_field_by_model[model_name] = use_name
+        
         continue
         
       if ('});' in use_line) and is_in_interface:
-        new_file_contents.append('}')
-        new_file_contents.append('\n\n')
+        new_file_contents.append('}\n\n')
         is_in_interface = False
         continue
         
@@ -359,13 +441,16 @@ def convert_model_to_interface(
   except Exception as e:
     print(f"Error writing to interfaces file: {e}")
     pass
+  
+  
+  print(fields_by_model)
     
   
   
   return singular_model_names
   
   
-  
+
   
   
 def run():
