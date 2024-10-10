@@ -34,8 +34,8 @@ def format_updates_from_dto(f: str) -> str:
   
   formatted = f"{f}: dto.{f},"
     
-  print ('formatted:')
-  print (formatted)
+  # print ('formatted:')
+  # print (formatted)
 
   return formatted
 
@@ -47,8 +47,8 @@ def format_dto_fields(f: str) -> str:
     f
   )
     
-  print ('decorated:')
-  print (decorated)
+  # print ('decorated:')
+  # print (decorated)
 
   return decorated
 
@@ -338,7 +338,7 @@ export class {model_name}Service {{
   }}
   
   static async update{model_name}(user_id: number, {snake_name}_id: number, dto: Update{model_name}Dto) {{
-    await {model_name_plural}Repo.update({{
+    const updates = await {model_name_plural}Repo.update({{
       {'\n      '.join([ (format_updates_from_dto(f)) for f in field_names_by_model.get(model_name, []) ])}
     }}, {{
       where: {{
@@ -346,6 +346,7 @@ export class {model_name}Service {{
         {user_owner_field_by_model.get(model_name, 'owner_id')}: user_id
       }}
     }});
+    return updates;
   }}
   
   static async patch{model_name}(user_id: number, {snake_name}_id: number, dto: Update{model_name}Dto) {{
@@ -356,12 +357,13 @@ export class {model_name}Service {{
         delete updateData[key]
       }}
     }});
-    await {model_name_plural}Repo.update(updateData, {{
+    const updates = await {model_name_plural}Repo.update(updateData, {{
       where: {{
         id: {snake_name}_id,
         {user_owner_field_by_model.get(model_name, 'owner_id')}: user_id
       }}
     }});
+    return updates;
   }}
   
   static async delete{model_name}(user_id: number, {snake_name}_id: number) {{
