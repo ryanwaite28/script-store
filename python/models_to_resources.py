@@ -24,6 +24,22 @@ def pluralize(s: str) -> str:
   else:
     return s + 's'
   
+def format_updates_from_dto(f: str) -> str:
+  '''
+  f: str - a converted field name string from a sequelize model definition
+  return example:
+  
+  name: dto.name,
+  '''
+  
+  formatted = f"{f}: dto.{f},"
+    
+  print ('formatted:')
+  print (formatted)
+
+  return formatted
+
+
 def format_dto_fields(f: str) -> str:
   decorated = (
     '  ' + ('@IsOptional()' if ('| null' in f) else '@IsNotEmpty()') + '\n' + 
@@ -31,7 +47,8 @@ def format_dto_fields(f: str) -> str:
     f
   )
     
-  print ('decorated:', decorated)
+  print ('decorated:')
+  print (decorated)
 
   return decorated
 
@@ -40,7 +57,8 @@ def format_dto_fields(f: str) -> str:
   
 user_owner_field_by_model = {}
 
-fields_by_model: dict[list[str]] = {}
+field_names_by_model: dict[list[str]] = {}
+field_definitions_by_model: dict[list[str]] = {}
   
   
 def create_resource(
@@ -239,8 +257,10 @@ import {{ UploadedFile }} from "express-fileupload";
 import {{ AwsS3Service, AwsS3UploadResults }} from "../../services/s3.aws.service";
 import {{ s3_objects_repo }} from "../s3-objects/s3-objects.repository";
 import {{ ModelTypes }} from "../../lib/constants/model-types.enum";
-import {{ readFile }} from "fs/promises";
-import {{ S3Objects }} from '@app/backend';
+import {{
+  S3Objects,
+  createTransaction
+}} from '@app/backend';
 import {{ Includeable, col, literal }} from "sequelize";
 import {{ {model_name_plural}Repo }} from "./{kebob_name_plural}.repository";
 
@@ -255,19 +275,102 @@ export class {model_name}Service {{
   }}
   
   static async create{model_name}(user_id: number, dto: Create{model_name}Dto, files?: MapType<UploadedFile>) {{
+    const s3Uploads: AwsS3UploadResults[] = [];
+    let new_{snake_name}_id: number = null;
+    
+    try {{
+      // start a new database transaction
+      await createTransaction(async (transaction) => {{
+        
+        // create the {model_name} record
+        const new_{snake_name} = await {model_name_plural}Repo.create({{
+          {'\n          '.join([ (format_updates_from_dto(f)) for f in field_names_by_model.get(model_name, []) ])}
+        }}, {{ transaction }});
+        
+        new_{snake_name}_id = new_{snake_name}.id;
+        
+        if (files) {{
+          const media_key = 'media';
+          
+          if (files[media_key]) {{
+            const file: UploadedFile = files[media_key];
+            const s3UploadResults: AwsS3UploadResults = await AwsS3Service.uploadFile(file);
+            s3Uploads.push(s3UploadResults);
+
+            const s3Object = await s3_objects_repo.create({{
+              model_type: ModelTypes.{snake_name.upper()},
+              model_id: new_{snake_name}.id,
+              mimetype: file.mimetype,
+              is_private: false,
+              region: s3UploadResults.Region,
+              bucket: s3UploadResults.Bucket,
+              key: s3UploadResults.Key,
+            }}, {{ transaction }});
+
+            await {model_name_plural}Repo.update({{ media_id: s3Object.id }}, {{ where: {{ id: new_{snake_name}.id }}, transaction }});
+          }}
+        }}
+        
+      }});
+      
+      return {model_name_plural}Repo.findOne({{
+        where: {{ id: new_{snake_name}_id }}
+      }});
+    }}
+    catch (error) {{
+      // transaction rollback; delete all uploaded s3 objects
+      if (s3Uploads.length > 0) {{
+        for (const s3Upload of s3Uploads) {{
+          AwsS3Service.deleteObject(s3Upload)
+          .catch((error) => {{
+            LOGGER.error('s3 delete object error', {{ error, s3Upload }});
+          }});
+        }}
+      }}
+
+      LOGGER.error('Error creating {model_name}', error);
+      throw new HttpRequestException(HttpStatusCodes.INTERNAL_SERVER_ERROR, {{
+        message: 'Could not create {model_name}',
+        context: error
+      }});
+    }}
     
   }}
   
   static async update{model_name}(user_id: number, {snake_name}_id: number, dto: Update{model_name}Dto) {{
-    
+    await {model_name_plural}Repo.update({{
+      {'\n      '.join([ (format_updates_from_dto(f)) for f in field_names_by_model.get(model_name, []) ])}
+    }}, {{
+      where: {{
+        id: {snake_name}_id,
+        {user_owner_field_by_model.get(model_name, 'owner_id')}: user_id
+      }}
+    }});
   }}
   
   static async patch{model_name}(user_id: number, {snake_name}_id: number, dto: Update{model_name}Dto) {{
-    
+    const updateData = {{ ...dto }};
+    Object.keys(updateData).forEach((key) => {{
+      const isEmpty = (updateData[key] === null || updateData[key] === undefined);
+      if (isEmpty) {{
+        delete updateData[key]
+      }}
+    }});
+    await {model_name_plural}Repo.update(updateData, {{
+      where: {{
+        id: {snake_name}_id,
+        {user_owner_field_by_model.get(model_name, 'owner_id')}: user_id
+      }}
+    }});
   }}
   
   static async delete{model_name}(user_id: number, {snake_name}_id: number) {{
-    
+    return {model_name_plural}Repo.destroy({{ 
+      where: {{
+        id: {snake_name}_id,
+        {user_owner_field_by_model.get(model_name, 'owner_id')}: user_id
+      }}
+    }});
   }}
         
 }}''')
@@ -308,8 +411,7 @@ import {{
 
 export class Create{model_name}Dto implements Partial<{model_name}Entity> {{
   
-  
-{'\n'.join([ format_dto_fields(f) for f in fields_by_model.get(model_name, []) ])}
+{'\n'.join([ format_dto_fields(f) for f in field_definitions_by_model.get(model_name, []) ])}
 }}
 
         
@@ -337,8 +439,7 @@ import {{
 
 export class Update{model_name}Dto implements Partial<{model_name}Entity> {{
   
-  
-{'\n'.join([ format_dto_fields(f) for f in fields_by_model.get(model_name, []) ])}
+{'\n'.join([ format_dto_fields(f) for f in field_definitions_by_model.get(model_name, []) ])}
 }}
 
         
@@ -356,7 +457,8 @@ def convert_model_to_interface(
 ):
   
   global user_owner_field_by_model
-  global fields_by_model
+  global field_definitions_by_model
+  global field_names_by_model
   
   # file with sequelize models
   
@@ -414,9 +516,11 @@ def convert_model_to_interface(
         field_definition = f'''  {use_name}: {use_type};\n'''  
         new_file_contents.append(field_definition)
         
-        fields_by_model[model_name] = fields_by_model.get(model_name, [])
-        fields_by_model[model_name].append(field_definition)
+        field_definitions_by_model[model_name] = field_definitions_by_model.get(model_name, [])
+        field_definitions_by_model[model_name].append(field_definition)
         
+        field_names_by_model[model_name] = field_names_by_model.get(model_name, [])
+        field_names_by_model[model_name].append(use_name)
         
         if field_owner_match:
           user_owner_field_by_model[model_name] = use_name
@@ -443,7 +547,7 @@ def convert_model_to_interface(
     pass
   
   
-  print(fields_by_model)
+  print(field_definitions_by_model)
     
   
   
