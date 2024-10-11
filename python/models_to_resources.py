@@ -281,6 +281,8 @@ export interface I{model_name}Service {{
 
 @Service()
 export class {model_name}Service implements I{model_name}Service {{
+  
+  constructor() {{}}
 
   async get{model_name}ById({snake_name}_id: number) {{
     return {model_name_plural}Repo.findOne({{
@@ -470,7 +472,8 @@ export class Update{model_name}Dto implements Partial<{model_name}Entity> {{
 
 def convert_model_to_interface(
   models_file_path: str,
-  interfaces_file_path: str = None
+  interfaces_file_path: str = None,
+  model_types_file_path: str = None,
 ):
   
   global user_owner_field_by_model
@@ -563,6 +566,25 @@ def convert_model_to_interface(
     print(f"Error writing to interfaces file: {e}")
     pass
   
+  model_types_contents = [
+    'export enum ModelTypes {\n',
+  ]
+  try:
+    for model_name in singular_model_names:
+      snake_name = camel_to_snake(model_name)
+      model_types_contents.append(f'  {snake_name.upper()} = "{snake_name.upper()}",\n')
+    model_types_contents.append('}\n')
+      
+    with open(f"model-types-converted.enum.ts", 'w') as f:
+      f.write(''.join(model_types_contents))
+    
+    if model_types_file_path:
+      with open(model_types_file_path, 'w') as f:
+        f.write(''.join(model_types_contents))
+  except Exception as e:
+    print(f"Error writing to interfaces file: {e}")
+    pass
+  
   
   print(field_definitions_by_model)
     
@@ -580,11 +602,14 @@ def run():
   
   use_interfaces_file_path = "src/libs/shared/src/lib/interfaces/models.interface.ts"
   
+  use_model_types_file_path = "src/apps/app-server/src/lib/constants/model-types.enum.ts"
+  
   # --- #
   
   singular_model_names = convert_model_to_interface(
     models_file_path = use_models_file_path,
-    interfaces_file_path = use_interfaces_file_path
+    interfaces_file_path = use_interfaces_file_path,
+    model_types_file_path = use_model_types_file_path,
   )
   
   print('singular_model_names:', singular_model_names)
