@@ -229,6 +229,7 @@ export async function AuthUserOwns{model_name}(
   response: Response,
   next: NextFunction
 ) {{
+  /* TODO: implement user ownership check 
   const {model_var_name} = response.locals.{model_var_name} as {model_name}Entity;
   const isOwner = {model_var_name}.{user_owner_field_by_model.get(model_name, 'owner_id')} === request['auth'].id;
   if (!isOwner) {{
@@ -237,6 +238,7 @@ export async function AuthUserOwns{model_name}(
     }});
   }}
   return next();
+  */
 }}
 
 
