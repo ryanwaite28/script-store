@@ -138,18 +138,21 @@ import {{ JwtUser }} from '../../decorators/jwt.decorator';
 import {{ MapType, UserEntity }} from '@app/shared';
 import {{ FileUpload, FileUploadByName }} from '../../decorators/file-upload.decorator';
 import {{ UploadedFile }} from 'express-fileupload';
-
+import {{ Service }} from 'typedi';
 
 
 
 @Controller('/web/{kebob_name_plural}')
 @Controller('/mobile/{kebob_name_plural}')
 @Controller('/api/{kebob_name_plural}')
+@Service()
 export class {model_name}Controller {{
+  
+  constructor(private {model_var_name}Service: {model_name}Service) {{}}
 
   @Get('/:id')
   getOne(@Param('id') id: number) {{
-    return {model_name}Service.get{model_name}ById(id);
+    return this.{model_var_name}Service.get{model_name}ById(id);
   }}
 
   @Post('')
@@ -159,7 +162,7 @@ export class {model_name}Controller {{
     @Body({{ validate: true }}) dto: Create{model_name}Dto,
     @FileUpload() files: MapType<UploadedFile>
   ) {{
-    return {model_name}Service.create{model_name}(user.id, dto, files);
+    return this.{model_var_name}Service.create{model_name}(user.id, dto, files);
   }}
 
   @Put('/:id')
@@ -169,7 +172,7 @@ export class {model_name}Controller {{
     @Param('id') id: number,
     @Body({{ validate: true }}) dto: Update{model_name}Dto
   ) {{
-    return {model_name}Service.update{model_name}(user.id, id, dto);
+    return this.{model_var_name}Service.update{model_name}(user.id, id, dto);
   }}
 
   @Patch('/:id')
@@ -179,7 +182,7 @@ export class {model_name}Controller {{
     @Param('id') id: number,
     @Body({{ validate: true }}) dto: Update{model_name}Dto
   ) {{
-    return {model_name}Service.patch{model_name}(user.id, id, dto);
+    return this.{model_var_name}Service.patch{model_name}(user.id, id, dto);
   }}
 
   @Delete('/:id')
@@ -188,7 +191,7 @@ export class {model_name}Controller {{
     @JwtUser() user: UserEntity,
     @Param('id') id: number
   ) {{
-    return {model_name}Service.delete{model_name}(user.id, id);
+    return this.{model_var_name}Service.delete{model_name}(user.id, id);
   }}
         
 }}''')
@@ -264,26 +267,28 @@ import {{
 }} from '@app/backend';
 import {{ Includeable, col, literal }} from "sequelize";
 import {{ {model_name_plural}Repo }} from "./{kebob_name_plural}.repository";
-
+import {{ Service }} from 'typedi';
 
 
 export interface I{model_name}Service {{
   get{model_name}ById({snake_name}_id: number): Promise<{model_name}Entity>;
   create{model_name}(user_id: number, dto: Create{model_name}Dto, files?: MapType<UploadedFile>): Promise<{model_name}Entity>;
-  update{model_name}(user_id: number, {snake_name}_id: number, dto: Update{model_name}Dto): Promise<number>;
-  patch{model_name}(user_id: number, {snake_name}_id: number, dto: Update{model_name}Dto): Promise<number>;
-  delete{model_name}(user_id: number, {snake_name}_id: number): Promise<number>;
+  update{model_name}(user_id: number, {snake_name}_id: number, dto: Update{model_name}Dto): Promise<{{ rows: number }}>;
+  patch{model_name}(user_id: number, {snake_name}_id: number, dto: Update{model_name}Dto): Promise<{{ rows: number }}>;
+  delete{model_name}(user_id: number, {snake_name}_id: number): Promise<{{ rows: number }}>;
 }}
 
+
+@Service()
 export class {model_name}Service implements I{model_name}Service {{
 
-  static async get{model_name}ById({snake_name}_id: number) {{
+  async get{model_name}ById({snake_name}_id: number) {{
     return {model_name_plural}Repo.findOne({{
       where: {{ id: {snake_name}_id }}
     }});
   }}
   
-  static async create{model_name}(user_id: number, dto: Create{model_name}Dto, files?: MapType<UploadedFile>) {{
+  async create{model_name}(user_id: number, dto: Create{model_name}Dto, files?: MapType<UploadedFile>) {{
     const s3Uploads: AwsS3UploadResults[] = [];
     let new_{snake_name}_id: number = null;
     
@@ -346,7 +351,7 @@ export class {model_name}Service implements I{model_name}Service {{
     
   }}
   
-  static async update{model_name}(user_id: number, {snake_name}_id: number, dto: Update{model_name}Dto) {{
+  async update{model_name}(user_id: number, {snake_name}_id: number, dto: Update{model_name}Dto) {{
     const updates = await {model_name_plural}Repo.update({{
       {'\n      '.join([ (format_updates_from_dto(f)) for f in field_names_by_model.get(model_name, []) ])}
     }}, {{
@@ -355,10 +360,10 @@ export class {model_name}Service implements I{model_name}Service {{
         {user_owner_field_by_model.get(model_name, 'owner_id')}: user_id
       }}
     }});
-    return updates;
+    return {{ rows: updates.rows }};
   }}
   
-  static async patch{model_name}(user_id: number, {snake_name}_id: number, dto: Update{model_name}Dto) {{
+  async patch{model_name}(user_id: number, {snake_name}_id: number, dto: Update{model_name}Dto) {{
     const updateData = {{ ...dto }};
     Object.keys(updateData).forEach((key) => {{
       const isEmpty = (updateData[key] === null || updateData[key] === undefined);
@@ -372,16 +377,17 @@ export class {model_name}Service implements I{model_name}Service {{
         {user_owner_field_by_model.get(model_name, 'owner_id')}: user_id
       }}
     }});
-    return updates;
+    return {{ rows: updates.rows }};
   }}
   
-  static async delete{model_name}(user_id: number, {snake_name}_id: number) {{
-    return {model_name_plural}Repo.destroy({{ 
+  async delete{model_name}(user_id: number, {snake_name}_id: number) {{
+    const deletes = await {model_name_plural}Repo.destroy({{ 
       where: {{
         id: {snake_name}_id,
         {user_owner_field_by_model.get(model_name, 'owner_id')}: user_id
       }}
     }});
+    return {{ rows: deletes.results }};
   }}
         
 }}''')
