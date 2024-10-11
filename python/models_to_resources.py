@@ -248,6 +248,7 @@ import 'reflect-metadata';
 import {{
   HttpStatusCodes,
   UserEntity,
+  {model_name}Entity,
   MapType,
 }} from "@app/shared";
 import {{ Create{model_name}Dto }} from "./dto/{kebob_name_plural}.create.dto";
@@ -266,7 +267,15 @@ import {{ {model_name_plural}Repo }} from "./{kebob_name_plural}.repository";
 
 
 
-export class {model_name}Service {{
+export interface I{model_name}Service {{
+  get{model_name}ById({snake_name}_id: number): Promise<{model_name}Entity>;
+  create{model_name}(user_id: number, dto: Create{model_name}Dto, files?: MapType<UploadedFile>): Promise<{model_name}Entity>;
+  update{model_name}(user_id: number, {snake_name}_id: number, dto: Update{model_name}Dto): Promise<number>;
+  patch{model_name}(user_id: number, {snake_name}_id: number, dto: Update{model_name}Dto): Promise<number>;
+  delete{model_name}(user_id: number, {snake_name}_id: number): Promise<number>;
+}}
+
+export class {model_name}Service implements I{model_name}Service {{
 
   static async get{model_name}ById({snake_name}_id: number) {{
     return {model_name_plural}Repo.findOne({{
