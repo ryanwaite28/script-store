@@ -284,7 +284,9 @@ export interface I{model_name}Service {{
 @Service()
 export class {model_name}Service implements I{model_name}Service {{
   
-  constructor() {{}}
+  constructor(
+    private awsS3Service: AwsS3Service,
+  ) {{}}
 
   async get{model_name}ById({snake_name}_id: number) {{
     return {model_name_plural}Repo.findOne({{
@@ -312,7 +314,7 @@ export class {model_name}Service implements I{model_name}Service {{
           
           if (files[media_key]) {{
             const file: UploadedFile = files[media_key];
-            const s3UploadResults: AwsS3UploadResults = await AwsS3Service.uploadFile(file);
+            const s3UploadResults: AwsS3UploadResults = await this.awsS3Service.uploadFile(file);
             s3Uploads.push(s3UploadResults);
 
             const s3Object = await s3_objects_repo.create({{
@@ -339,7 +341,7 @@ export class {model_name}Service implements I{model_name}Service {{
       // transaction rollback; delete all uploaded s3 objects
       if (s3Uploads.length > 0) {{
         for (const s3Upload of s3Uploads) {{
-          AwsS3Service.deleteObject(s3Upload)
+          this.awsS3Service.deleteObject(s3Upload)
           .catch((error) => {{
             LOGGER.error('s3 delete object error', {{ error, s3Upload }});
           }});
