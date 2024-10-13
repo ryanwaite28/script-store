@@ -345,7 +345,7 @@ export class {model_name}Service implements I{model_name}Service {{
 
           /* Upload multiple files if needed
           const filesKeys = Object.keys(files)
-          .filter((key) => {{
+          .filter((key: string) => {{
             return !!key;
           }});
           for (const key of filesKeys) {{           
@@ -455,7 +455,7 @@ import {{ Container, Token }} from "typedi";
 
 export const {snake_name.upper()}_REPO_INJECT_TOKEN = new Token<IModelCrud<{model_name}Entity>>('{snake_name.upper()}_REPO_INJECT_TOKEN');
 
-export const {model_name_plural}Repo: IModelCrud<{model_name}Entity> = sequelize_model_class_crud_to_entity_object<{model_name}Entity>({model_name_plural});
+const {model_name_plural}Repo: IModelCrud<{model_name}Entity> = sequelize_model_class_crud_to_entity_object<{model_name}Entity>({model_name_plural});
 
 Container.set({snake_name.upper()}_REPO_INJECT_TOKEN, {model_name_plural}Repo);
         
