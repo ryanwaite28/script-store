@@ -364,7 +364,7 @@ export class {model_name}Service implements I{model_name}Service {{
               key: s3UploadResults.Key,
             }}, {{ transaction }});
 
-            const new_recipe_media = await RecipeMediasRepo.create({{
+            const new_{snake_name}_media = await ___Repo.create({{
               {snake_name}_id: new_{snake_name}.id,
               media_id: s3Object.id,
               description: ''
