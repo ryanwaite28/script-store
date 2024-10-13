@@ -204,7 +204,8 @@ import {{
   HttpStatusCodes,
   {model_name}Entity,
 }} from '@app/shared';
-import {{ {model_name_plural}Repo }} from "./{kebob_name_plural}.repository";
+import {{ Container }} from "typedi";
+import {{ {snake_name.upper()}_REPO_INJECT_TOKEN }} from "./{kebob_name_plural}.repository";
 
 
 
@@ -214,7 +215,8 @@ export async function {model_name}Exists(
   next: NextFunction
 ) {{
   const id = parseInt(request.params.id, 10);
-  const {model_var_name}: {model_name}Entity = await {model_name_plural}Repo.findOne({{ where: {{ id }} }});
+  const {model_var_name}Repo = Container.get({snake_name.upper()}_REPO_INJECT_TOKEN);
+  const {model_var_name}: {model_name}Entity = await {model_var_name}Repo.findOne({{ where: {{ id }} }});
   if (!{model_var_name}) {{
     return response.status(HttpStatusCodes.NOT_FOUND).json({{
       message: `{model_name} does not exist by id: ${{ id }}`
@@ -253,6 +255,7 @@ import 'reflect-metadata';
 import {{
   HttpStatusCodes,
   UserEntity,
+  S3ObjectEntity,
   {model_name}Entity,
   MapType,
 }} from "@app/shared";
@@ -261,15 +264,20 @@ import {{ Update{model_name}Dto }} from "./dto/{kebob_name_plural}.update.dto";
 import {{ HttpRequestException, LOGGER, AppEnvironment }} from "@app/backend";
 import {{ UploadedFile }} from "express-fileupload";
 import {{ AwsS3Service, AwsS3UploadResults }} from "../../services/s3.aws.service";
-import {{ s3_objects_repo }} from "../s3-objects/s3-objects.repository";
+import {{
+  S3_OBJECT_REPO_INJECT_TOKEN,
+  getS3ObjectInclude
+}} from "../s3-objects/s3-objects.repository";
 import {{ ModelTypes }} from "../../lib/constants/model-types.enum";
 import {{
   S3Objects,
   createTransaction
 }} from '@app/backend';
 import {{ Includeable, col, literal }} from "sequelize";
-import {{ {model_name_plural}Repo }} from "./{kebob_name_plural}.repository";
-import {{ Service }} from 'typedi';
+import {{ {snake_name.upper()}_REPO_INJECT_TOKEN }} from "./{kebob_name_plural}.repository";
+import {{ Service, Inject }} from 'typedi';
+import {{ IModelCrud }} from "../../lib/utils/sequelize.utils";
+import {{ SocketIoService }} from '../../services/socket-io.service';
 
 
 export interface I{model_name}Service {{
@@ -285,11 +293,14 @@ export interface I{model_name}Service {{
 export class {model_name}Service implements I{model_name}Service {{
   
   constructor(
+    @Inject(S3_OBJECT_REPO_INJECT_TOKEN) private s3ObjectRepo: IModelCrud<S3ObjectEntity>,
+    @Inject({snake_name.upper()}_REPO_INJECT_TOKEN) private {model_var_name}Repo: IModelCrud<{model_name}Entity>,
     private awsS3Service: AwsS3Service,
+    private socketService: SocketIoService,
   ) {{}}
 
   async get{model_name}ById({snake_name}_id: number) {{
-    return {model_name_plural}Repo.findOne({{
+    return this.{model_var_name}Repo.findOne({{
       where: {{ id: {snake_name}_id }}
     }});
   }}
@@ -303,13 +314,14 @@ export class {model_name}Service implements I{model_name}Service {{
       await createTransaction(async (transaction) => {{
         
         // create the {model_name} record
-        const new_{snake_name} = await {model_name_plural}Repo.create({{
+        const new_{snake_name} = await this.{model_var_name}Repo.create({{
           {'\n          '.join([ (format_updates_from_dto(f)) for f in field_names_by_model.get(model_name, []) ])}
         }}, {{ transaction }});
         
         new_{snake_name}_id = new_{snake_name}.id;
         
         if (files) {{
+          /* Upload single file if needed
           const media_key = 'media';
           
           if (files[media_key]) {{
@@ -317,7 +329,7 @@ export class {model_name}Service implements I{model_name}Service {{
             const s3UploadResults: AwsS3UploadResults = await this.awsS3Service.uploadFile(file);
             s3Uploads.push(s3UploadResults);
 
-            const s3Object = await s3_objects_repo.create({{
+            const s3Object = await this.s3ObjectRepo.create({{
               model_type: ModelTypes.{snake_name.upper()},
               model_id: new_{snake_name}.id,
               mimetype: file.mimetype,
@@ -327,13 +339,43 @@ export class {model_name}Service implements I{model_name}Service {{
               key: s3UploadResults.Key,
             }}, {{ transaction }});
 
-            await {model_name_plural}Repo.update({{ media_id: s3Object.id }}, {{ where: {{ id: new_{snake_name}.id }}, transaction }});
+            await this.{model_var_name}Repo.update({{ media_id: s3Object.id }}, {{ where: {{ id: new_{snake_name}.id }}, transaction }});
           }}
+          */
+
+          /* Upload multiple files if needed
+          const filesKeys = Object.keys(files)
+          .filter((key) => {{
+            return !!key;
+          }});
+          for (const key of filesKeys) {{           
+            // is recipe media file
+            const file: UploadedFile = files[key];
+            const s3UploadResults: AwsS3UploadResults = await this.awsS3Service.uploadFile(file);
+            s3Uploads.push(s3UploadResults);
+
+            const s3Object = await this.s3ObjectRepo.create({{
+              model_type: ModelTypes.{snake_name.upper()},
+              model_id: new_{snake_name}.id,
+              mimetype: file.mimetype,
+              is_private: false,
+              region: s3UploadResults.Region,
+              bucket: s3UploadResults.Bucket,
+              key: s3UploadResults.Key,
+            }}, {{ transaction }});
+
+            const new_recipe_media = await RecipeMediasRepo.create({{
+              {snake_name}_id: new_{snake_name}.id,
+              media_id: s3Object.id,
+              description: ''
+            }}, {{ transaction }});
+          }}
+          */
         }}
         
       }});
       
-      return {model_name_plural}Repo.findOne({{
+      return this.{model_var_name}Repo.findOne({{
         where: {{ id: new_{snake_name}_id }}
       }});
     }}
@@ -358,7 +400,7 @@ export class {model_name}Service implements I{model_name}Service {{
   }}
   
   async update{model_name}(user_id: number, {snake_name}_id: number, dto: Update{model_name}Dto) {{
-    const updates = await {model_name_plural}Repo.update({{
+    const updates = await this.{model_var_name}Repo.update({{
       {'\n      '.join([ (format_updates_from_dto(f)) for f in field_names_by_model.get(model_name, []) ])}
     }}, {{
       where: {{
@@ -377,7 +419,7 @@ export class {model_name}Service implements I{model_name}Service {{
         delete updateData[key]
       }}
     }});
-    const updates = await {model_name_plural}Repo.update(updateData, {{
+    const updates = await this.{model_var_name}Repo.update(updateData, {{
       where: {{
         id: {snake_name}_id,
         {user_owner_field_by_model.get(model_name, 'owner_id')}: user_id
@@ -387,7 +429,7 @@ export class {model_name}Service implements I{model_name}Service {{
   }}
   
   async delete{model_name}(user_id: number, {snake_name}_id: number) {{
-    const deletes = await {model_name_plural}Repo.destroy({{ 
+    const deletes = await this.{model_var_name}Repo.destroy({{ 
       where: {{
         id: {snake_name}_id,
         {user_owner_field_by_model.get(model_name, 'owner_id')}: user_id
@@ -404,11 +446,18 @@ import 'reflect-metadata';
 import {{
   {model_name}Entity,
 }} from "@app/shared";
-import {{ sequelize_model_class_crud_to_entity_object }} from "../../lib/utils/sequelize.utils";
+import {{ sequelize_model_class_crud_to_entity_object, IModelCrud }} from "../../lib/utils/sequelize.utils";
 import {{ {model_name_plural} }} from '@app/backend';
+import {{ Container, Token }} from "typedi";
 
 
-export const {model_name_plural}Repo = sequelize_model_class_crud_to_entity_object<{model_name}Entity>({model_name_plural});
+
+
+export const {snake_name.upper()}_REPO_INJECT_TOKEN = new Token<IModelCrud<{model_name}Entity>>('{snake_name.upper()}_REPO_INJECT_TOKEN');
+
+export const {model_name_plural}Repo: IModelCrud<{model_name}Entity> = sequelize_model_class_crud_to_entity_object<{model_name}Entity>({model_name_plural});
+
+Container.set({snake_name.upper()}_REPO_INJECT_TOKEN, {model_name_plural}Repo);
         
 ''')
     
