@@ -1,3 +1,5 @@
+# A few custom logic but can be refactored to many use cases
+
 import re, os, shutil
 
 def singularize_word(word):
@@ -79,17 +81,40 @@ def generate_service_interface(table_name, package_prefix):
     return f"""\
 package {package_prefix}.services.interfaces;
 
+import {package_prefix}.dto.{class_name}Dto;
+import java.util.UUID;
+
+
 public interface {class_name}Service {{
   
-  
+    {class_name}Dto getById(UUID id);
+    
+    {class_name}Dto create({class_name}Dto dto);
+    
+    {class_name}Dto update(UUID id, {class_name}Dto dto);
+    
+    {class_name}Dto patch(UUID id, {class_name}Dto dto);
+    
+    {class_name}Dto delete(UUID id);
   
 }}
 """
 
 
-def generate_service_interface_implementation(table_name, package_prefix):
+def generate_service_interface_implementation(table_name, columns, package_prefix):
     class_name = make_class_name(table_name)
     var_name = class_name[0].lower() + class_name[1:]
+    
+    patch_statements = []
+    
+    for col_name, data_type in columns.items():
+        java_type = sql_to_java_type(data_type)
+        if col_name == 'id':
+            continue
+        patch_statements.append(f"""
+      if (dto.get{snake_to_camel(col_name.capitalize())}() != null) {{
+          entity.set{snake_to_camel(col_name.capitalize())}({ "UUID.fromString(" if java_type == "UUID" else "" }dto.get{snake_to_camel(col_name.capitalize())}(){ ")" if java_type == "UUID" else "" });
+      }}""")
     
     return f"""\
 package {package_prefix}.services.implementations;
@@ -99,6 +124,11 @@ import {package_prefix}.entities.{class_name}Entity;
 import {package_prefix}.dto.{class_name}Dto;
 import {package_prefix}.repositories.{class_name}Repository;
 import org.springframework.stereotype.Service;
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+
+
 
 @Service
 public class {class_name}ServiceImpl implements {class_name}Service {{
@@ -109,7 +139,80 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
         {class_name}Repository {var_name}Repository
     ) {{
         this.{var_name}Repository = {var_name}Repository;
-    }} 
+    }}
+    
+    
+    @Override
+    public {class_name}Dto getById(UUID id) {{
+        {class_name}Entity entity = this.{var_name}Repository.findById(id).orElse(null);
+        if (entity == null || entity.getDeletedAtUtc() != null) {{
+            return null;
+        }}
+        return {class_name}Dto.fromEntity(entity);
+    }}
+    
+    @Override
+    public {class_name}Dto create({class_name}Dto dto) {{
+      if (dto == null) {{
+        throw new IllegalArgumentException("DTO cannot be null");
+      }}
+      {class_name}Entity entity = {class_name}Dto.toEntity(dto);
+      return {class_name}Dto.fromEntity(this.{var_name}Repository.save(entity));
+    }}
+    
+    @Override
+    public {class_name}Dto update(UUID id, {class_name}Dto dto) {{
+      if (dto == null) {{
+        throw new IllegalArgumentException("DTO cannot be null");
+      }}
+      
+      {class_name}Entity entity = this.{var_name}Repository.findById(id).orElse(null);
+      if (entity == null || entity.getDeletedAtUtc() != null) {{
+          throw new IllegalArgumentException("Entity with id " + id + " does not exist");
+      }}
+      if (!id.equals(entity.getId())) {{
+        throw new IllegalArgumentException("Entity ID does not match path ID");
+      }}
+      
+      {class_name}Entity savingEntity = {class_name}Dto.toEntity(dto);
+      savingEntity.setId(entity.getId());
+      savingEntity.setUpdatedAtUtc(LocalDateTime.now());
+  
+      return {class_name}Dto.fromEntity(this.{var_name}Repository.save(savingEntity));
+    }}
+    
+    @Override
+    public {class_name}Dto patch(UUID id, {class_name}Dto dto){{
+      if (dto == null) {{
+        throw new IllegalArgumentException("DTO cannot be null");
+      }}
+      
+      {class_name}Entity entity = this.{var_name}Repository.findById(id).orElse(null);
+      if (entity == null || entity.getDeletedAtUtc() != null) {{
+          throw new IllegalArgumentException("Entity with id " + id + " does not exist");
+      }}
+      
+      {"".join(patch_statements)}
+      
+      entity.setUpdatedAtUtc(LocalDateTime.now());
+      
+      return {class_name}Dto.fromEntity(this.{var_name}Repository.save(entity));
+    }}
+    
+    @Override
+    public {class_name}Dto delete(UUID id) {{
+      if (id == null) {{
+        throw new IllegalArgumentException("ID cannot be null");
+      }}
+      
+      {class_name}Entity entity = this.{var_name}Repository.findById(id).orElse(null);
+      if (entity == null || entity.getDeletedAtUtc() != null) {{
+          throw new IllegalArgumentException("Entity with id " + id + " does not exist");
+      }}
+      
+      entity.setDeletedAtUtc(LocalDateTime.now());
+      return {class_name}Dto.fromEntity(this.{var_name}Repository.save(entity));
+    }}
   
 }}
 """
@@ -117,11 +220,15 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
 
 
 
-def generate_main_service_interface(service_name, package_prefix):
+def generate_main_service_interface(service_name, package_prefix, import_configs, datasources_package_prefix):
     class_name = make_class_name(service_name, False)
     
     return f"""\
 package {package_prefix}.services.interfaces;
+
+import {datasources_package_prefix}.dto.*;
+import java.util.UUID;
+
 
 public interface {class_name}Service {{
   
@@ -193,12 +300,18 @@ public class {class_name}Dto {{
 {"\n".join(fields)}
 
     public static {class_name}Dto fromEntity({class_name}Entity entity) {{
+        if (entity == null) {{
+            return null;
+        }}
         return new {class_name}Dto(
 {',\n'.join(getters)}
         );
     }}
     
     public static {class_name}Entity toEntity({class_name}Dto dto) {{
+        if (dto == null) {{
+            return null;
+        }}
         return {class_name}Entity.builder()
 {'\n'.join([f"            .{snake_to_camel(col_name)}({ "UUID.fromString(" if sql_to_java_type(data_type) == "UUID" else "" }dto.get{snake_to_camel(col_name.capitalize())}(){ ")" if sql_to_java_type(data_type) == "UUID" else "" })" for col_name, data_type in columns.items()])}
             .build();
@@ -215,24 +328,90 @@ package {package_prefix}.repositories;
 
 import {package_prefix}.entities.{class_name}Entity;
 import org.springframework.data.jpa.repository.JpaRepository;
-
+import org.springframework.data.jpa.domain.Specification;
+import javax.persistence.criteria.Predicate;
 import java.util.UUID;
+
 
 public interface {class_name}Repository extends JpaRepository<{class_name}Entity, UUID> {{}}
 
 """
 
-def generate_service_controller(service_name, package_prefix):
+def generate_service_controller(table_name, service_name, app_package_prefix):
+    class_name = make_class_name(table_name)
+    url_name = '-'.join((table_name.split('.')[-1]).split('_'))
+    
+
+    return f"""\
+package {app_package_prefix}.datasources.{service_name}.controllers;
+
+import {app_package_prefix}.datasources.{service_name}.services.interfaces.{class_name}Service;
+import {app_package_prefix}.datasources.{service_name}.dto.{class_name}Dto;
+
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import java.io.IOException;
+import java.util.UUID;
+import {app_package_prefix}.domain.responses.DataResponse;
+
+
+/* Disabled by default */
+// @RestController
+// @RequestMapping("/{url_name}")
+public class {class_name}Controller {{
+
+    private final {class_name}Service {service_name}Service;
+    
+    public {class_name}Controller(
+      {class_name}Service {service_name}Service
+    ) {{
+        this.{service_name}Service = {service_name}Service;
+    }}
+    
+    @GetMapping(value = "/{{id}}")
+    public DataResponse<{class_name}Dto> getById(@PathVariable UUID id) {{
+        return new DataResponse<>(this.{service_name}Service.getById(id));
+    }}
+    
+    @PostMapping
+    public DataResponse<{class_name}Dto> create(@RequestBody {class_name}Dto dto) {{
+        return new DataResponse<>(this.{service_name}Service.create(dto));
+    }}
+    
+    @PutMapping(value = "/{{id}}")
+    public DataResponse<{class_name}Dto> update(@PathVariable UUID id, @RequestBody {class_name}Dto dto) {{
+        return new DataResponse<>(this.{service_name}Service.update(id, dto));
+    }}
+    
+    @PatchMapping(value = "/{{id}}")
+    public DataResponse<{class_name}Dto> patch(@PathVariable UUID id, @RequestBody {class_name}Dto dto) {{
+        return new DataResponse<>(this.{service_name}Service.patch(id, dto));
+    }}
+    
+    @DeleteMapping(value = "/{{id}}")
+    public DataResponse<{class_name}Dto> delete(@PathVariable UUID id) {{
+        return new DataResponse<>(this.{service_name}Service.delete(id));
+    }}
+    
+
+}}
+
+"""
+
+def generate_main_service_controller(service_name, package_prefix):
     class_name = make_class_name(service_name, False)
 
     return f"""\
 package {package_prefix}.controllers;
 
-import {package_prefix}.services.interfaces.{class_name}Service;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.UUID;
+import {package_prefix}.services.interfaces.{class_name}Service;
+import {package_prefix}.domain.responses.DataResponse;
+import {package_prefix}.domain.responses.JwtResults;
+import {package_prefix}.datasources.{sql_config['service']}.dto.*;
 
 
 
@@ -247,6 +426,9 @@ public class {class_name}Controller {{
     ) {{
         this.{service_name}Service = {service_name}Service;
     }}
+    
+
+    
 
 }}
 
@@ -356,6 +538,7 @@ def parse_sql_file(sql_config):
     repositories = {}
     service_interfaces = {}
     service_implementations = {}
+    controllers = {}
     import_configs: list = []
     
     for table_name, columns_def in table_definitions:
@@ -386,24 +569,26 @@ def parse_sql_file(sql_config):
         dto[table_name] = generate_dto(table_name, columns, datasources_package_prefix)
         repositories[table_name] = generate_repository(table_name, columns, datasources_package_prefix)
         service_interfaces[table_name] = generate_service_interface(table_name, datasources_package_prefix)
-        service_implementations[table_name] = generate_service_interface_implementation(table_name, datasources_package_prefix)
+        service_implementations[table_name] = generate_service_interface_implementation(table_name, columns, datasources_package_prefix)
+        controllers[table_name] = generate_service_controller(table_name, service_name, app_package_prefix)
         
         import_configs_by_table = generate_main_service_import_config(table_name, datasources_package_prefix)
         import_configs.append(import_configs_by_table)
         
-    main_service_interface = generate_main_service_interface(service_name, app_package_prefix)
+    main_service_interface = generate_main_service_interface(service_name, app_package_prefix, import_configs, datasources_package_prefix)
     main_service_implementation = generate_main_service_interface_implementation(service_name, app_package_prefix, import_configs, datasources_package_prefix)
-    controller = generate_service_controller(service_name, app_package_prefix)
+    main_controller = generate_main_service_controller(service_name, app_package_prefix)
 
     return {
       'entities': entities,
       'dto': dto,
       'repositories': repositories,
+      'controllers': controllers,
       'service_interfaces': service_interfaces,
       'service_implementations': service_implementations,
       'main_service_interface': main_service_interface,
       'main_service_implementation': main_service_implementation,
-      'controller': controller,
+      'main_controller': main_controller,
     }
 
 
@@ -432,7 +617,7 @@ def write_itema_to_files(items, classNameSuffix, output_dir):
 
 if __name__ == "__main__":
     sql_configs = [
-      { "service": "", "sql_path": '' }
+      # format: { "service": "service_name", "sql_path": "path/to/sql_file.sql" },
     ]
     
     if os.path.exists("src"):
@@ -446,12 +631,13 @@ if __name__ == "__main__":
       write_itema_to_files(items = results['entities'], classNameSuffix = "Entity", output_dir = f'src/datasources/{sql_config['service']}/entities')
       write_itema_to_files(items = results['dto'], classNameSuffix = "Dto", output_dir = f'src/datasources/{sql_config['service']}/dto')
       write_itema_to_files(items = results['repositories'], classNameSuffix = "Repository", output_dir = f'src/datasources/{sql_config['service']}/repositories')
+      write_itema_to_files(items = results['controllers'], classNameSuffix = "Controller", output_dir = f'src/datasources/{sql_config['service']}/controllers')
       write_itema_to_files(items = results['service_interfaces'], classNameSuffix = "Service", output_dir = f'src/datasources/{sql_config['service']}/services/interfaces')
       write_itema_to_files(items = results['service_implementations'], classNameSuffix = "ServiceImpl", output_dir = f'src/datasources/{sql_config['service']}/services/implementations')
       
       write_to_file(contents = results['main_service_interface'], path_full = f'src/services/interfaces/{make_class_name(sql_config['service'], False)}Service.java')
       write_to_file(contents = results['main_service_implementation'], path_full = f'src/services/implementations/{make_class_name(sql_config['service'], False)}ServiceImpl.java')
-      write_to_file(contents = results['controller'], path_full = f'src/controllers/{make_class_name(sql_config['service'], False)}Controller.java')
+      write_to_file(contents = results['main_controller'], path_full = f'src/controllers/{make_class_name(sql_config['service'], False)}Controller.java')
     # END for
       
     print("Resource classes generated successfully")
