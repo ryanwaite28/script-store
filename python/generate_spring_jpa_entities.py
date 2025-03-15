@@ -210,7 +210,7 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
         List<{class_name}Dto> resultsData = pageResults.getContent().stream().map({class_name}Dto::fromEntity).toList();
         Integer offset = pageResults.getNumber();
         Integer limit = pageResults.getSize();
-        Integer page = pageResults.getNumber();
+        Integer page = pageResults.getNumber() + 1;
         Integer pages = pageResults.getTotalPages();
         Long resultsCount = resultsData.size();
         Long tableCount = this.{var_name}Repository.count();
