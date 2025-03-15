@@ -1,4 +1,6 @@
-# A few custom logic but can be refactored to many use cases
+# a few custom logic here and there, but mostly general purpose code
+# to generate spring jpa entities from sql files
+# the code is not perfect, but it's a good starting point
 
 import re, os, shutil
 
@@ -73,6 +75,31 @@ def sql_to_java_type(sql_type):
         return 'Double'
     else:
         return 'Object'
+      
+def sql_to_typescript_type(sql_type):
+    if (
+      'BIGINT' in sql_type 
+      or 'INT' in sql_type 
+      or 'SMALLINT' in sql_type 
+      or 'SERIAL' in sql_type 
+      or 'BIGSERIAL' in sql_type 
+      or 'DECIMAL' in sql_type 
+      or 'NUMERIC' in sql_type 
+      or 'REAL' in sql_type 
+      or 'DOUBLE' in sql_type 
+      or 'FLOAT' in sql_type 
+      or 'BIGDECIMAL' in sql_type
+      or 'MONEY' in sql_type
+    ):
+        return 'number'
+    if 'BOOLEAN' in sql_type:
+        return 'boolean'
+    elif ('VARCHAR' in sql_type or 'TEXT' in sql_type or 'JSON' in sql_type or 'JSOB' in sql_type or 'UUID' in sql_type or 'CHAR' in sql_type):
+        return 'string'
+    elif 'DATE' in sql_type or 'TIME' in sql_type:
+        return 'string'
+    else:
+        return 'any'
 
 
 def generate_service_interface(table_name, package_prefix):
@@ -266,6 +293,33 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
 """
 
 
+def generate_typescript_types_classes(table_name, columns):
+    class_name = make_class_name(table_name)
+    
+    fields = []
+    
+    for col_name, data_type in columns.items():
+        ts_type = sql_to_typescript_type(data_type)
+        
+        fields.append(f"{snake_to_camel(col_name)}: {ts_type}")
+    
+    return f"""\
+export type {class_name}Type = {{
+{",\n".join([ f"  {f}" for f in fields])}
+}}
+
+export interface {class_name}Interface {{
+{",\n".join([ f"  {f}" for f in fields])}
+}}
+
+export class {class_name}Entity implements {class_name}Interface {{
+
+  constructor(
+{",\n".join([ f"    public {f}" for f in fields])}
+  ) {{}}
+
+}}
+"""
 
 
 
@@ -326,13 +380,14 @@ def generate_repository(table_name, columns, package_prefix):
     return f"""\
 package {package_prefix}.repositories;
 
+import org.springframework.stereotype.Repository;
 import {package_prefix}.entities.{class_name}Entity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.domain.Specification;
-import javax.persistence.criteria.Predicate;
 import java.util.UUID;
 
 
+@Repository
 public interface {class_name}Repository extends JpaRepository<{class_name}Entity, UUID> {{}}
 
 """
@@ -431,7 +486,87 @@ public class {class_name}Controller {{
     
 
 }}
+"""
 
+
+def generate_datasource_config(service_name, package_prefix):
+    class_name = make_class_name(service_name, False)
+  
+    # When specifying multiple datasources in a spring boot app, at least one needs the @Primary annotation
+    # This is the one that will be used by default
+    return f"""\
+package {package_prefix}.config.datasources;
+
+import org.springframework.context.annotation.Primary;
+import jakarta.persistence.EntityManagerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.jdbc.DataSourceBuilder;
+import org.springframework.boot.orm.jpa.EntityManagerFactoryBuilder;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.orm.jpa.JpaTransactionManager;
+import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
+
+import javax.sql.DataSource;
+import java.util.Map;
+import java.util.Objects;
+
+@Configuration
+@EnableTransactionManagement
+@EnableJpaRepositories(
+    basePackages = "{package_prefix}.datasources.{service_name}",
+    entityManagerFactoryRef = "EntityManager-{class_name}DB",
+    transactionManagerRef = "EntityTransactionManager-{class_name}DB"
+)
+public class DatasourceJpaConfig{class_name}Db {{
+
+    private final String packageScanPath{class_name}Db = "{package_prefix}.datasources.{service_name}";
+
+    @Bean(name = "Datasource-{class_name}DB")
+    public DataSource Datasource{class_name}Db(
+        @Value("${{spring.datasource.microservice.{service_name}.url}}") String url,
+        @Value("${{spring.datasource.microservice.{service_name}.username}}") String username,
+        @Value("${{spring.datasource.microservice.{service_name}.password}}") String password,
+        @Value("${{spring.datasource.microservice.{service_name}.driver-class-name}}") String driverClassName
+    ) {{
+        return DataSourceBuilder.create()
+            .url(url)
+            .username(username)
+            .password(password)
+            .driverClassName(driverClassName)
+            .build();
+    }}
+
+    @Bean("EntityManager-{class_name}DB")
+    public LocalContainerEntityManagerFactoryBean entityManagerFactory{class_name}Db(
+        @Qualifier("Datasource-{class_name}DB") DataSource dataSource,
+        @Value("${{spring.datasource.microservice.{service_name}.schema}}") String pgSchema,
+        @Value("${{spring.datasource.microservice.{service_name}.hibernate.dialect}}") String hibernateDialect,
+        EntityManagerFactoryBuilder builder
+    ) {{
+        return builder
+            .dataSource(dataSource)
+            .packages(this.packageScanPath{class_name}Db)
+            .properties(Map.ofEntries(
+                Map.entry("hibernate.default_schema", pgSchema),
+                Map.entry("hibernate.dialect", hibernateDialect)
+            ))
+            .build();
+    }}
+
+    @Bean("EntityTransactionManager-{class_name}DB")
+    public PlatformTransactionManager transactionManager{class_name}Db(
+        @Qualifier("EntityManager-{class_name}DB") LocalContainerEntityManagerFactoryBean entityManager{class_name}Db
+    ) {{
+        EntityManagerFactory emf = Objects.requireNonNull(entityManager{class_name}Db.getObject());
+        return new JpaTransactionManager(emf);
+    }}
+
+}}
 """
 
 def generate_main_service_import_config(table_name, package_prefix):
@@ -461,6 +596,7 @@ def snake_to_camel(snake_string):
   
 def generate_entity_class(table_name, columns, package_prefix):
     class_name = make_class_name(table_name)
+    
     entity_code = f"""\
 package {package_prefix}.entities;
 
@@ -483,7 +619,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @NoArgsConstructor
 @Entity
-@Table(name = "{table_name}")
+@Table(name = "{table_name.split('.')[-1] if '.' in table_name else table_name}")
 public class {class_name}Entity {{
 """
     for col_name, col_type in columns.items():
@@ -535,6 +671,7 @@ def parse_sql_file(sql_config):
     
     entities = {}
     dto = {}
+    typescript_types_classes = {}
     repositories = {}
     service_interfaces = {}
     service_implementations = {}
@@ -571,10 +708,12 @@ def parse_sql_file(sql_config):
         service_interfaces[table_name] = generate_service_interface(table_name, datasources_package_prefix)
         service_implementations[table_name] = generate_service_interface_implementation(table_name, columns, datasources_package_prefix)
         controllers[table_name] = generate_service_controller(table_name, service_name, app_package_prefix)
+        typescript_types_classes[table_name] = generate_typescript_types_classes(table_name, columns)
         
         import_configs_by_table = generate_main_service_import_config(table_name, datasources_package_prefix)
         import_configs.append(import_configs_by_table)
         
+    main_datasource_config = generate_datasource_config(service_name, app_package_prefix)
     main_service_interface = generate_main_service_interface(service_name, app_package_prefix, import_configs, datasources_package_prefix)
     main_service_implementation = generate_main_service_interface_implementation(service_name, app_package_prefix, import_configs, datasources_package_prefix)
     main_controller = generate_main_service_controller(service_name, app_package_prefix)
@@ -582,10 +721,12 @@ def parse_sql_file(sql_config):
     return {
       'entities': entities,
       'dto': dto,
+      'typescript_types_classes': typescript_types_classes,
       'repositories': repositories,
       'controllers': controllers,
       'service_interfaces': service_interfaces,
       'service_implementations': service_implementations,
+      'main_datasource_config': main_datasource_config,
       'main_service_interface': main_service_interface,
       'main_service_implementation': main_service_implementation,
       'main_controller': main_controller,
@@ -599,10 +740,10 @@ def write_to_file(contents, path_full):
     with open(path_full, 'w') as file:
       file.write(contents)
                     
-def write_itema_to_files(items, classNameSuffix, output_dir):
+def write_items_to_files(items: list, output_dir: str, classNameSuffix: str = None, makeFileName: lambda n: str = None):
      for table_name, code in items.items():
         class_name = make_class_name(table_name)
-        file_path = os.path.join(output_dir, f"{class_name}{classNameSuffix}.java")
+        file_path = os.path.join(output_dir, makeFileName(table_name) if makeFileName else f"{class_name}{classNameSuffix}.java")
         write_to_file(code, file_path)
             
     #  os.makedirs(output_dir, exist_ok=True)
@@ -617,7 +758,8 @@ def write_itema_to_files(items, classNameSuffix, output_dir):
 
 if __name__ == "__main__":
     sql_configs = [
-      # format: { "service": "service_name", "sql_path": "path/to/sql_file.sql" },
+      # format: { "service": "service_name", "sql_path": "full/path/to/sql_file.sql" }
+      
     ]
     
     if os.path.exists("src"):
@@ -628,13 +770,15 @@ if __name__ == "__main__":
       
       results = parse_sql_file(sql_config)
       
-      write_itema_to_files(items = results['entities'], classNameSuffix = "Entity", output_dir = f'src/datasources/{sql_config['service']}/entities')
-      write_itema_to_files(items = results['dto'], classNameSuffix = "Dto", output_dir = f'src/datasources/{sql_config['service']}/dto')
-      write_itema_to_files(items = results['repositories'], classNameSuffix = "Repository", output_dir = f'src/datasources/{sql_config['service']}/repositories')
-      write_itema_to_files(items = results['controllers'], classNameSuffix = "Controller", output_dir = f'src/datasources/{sql_config['service']}/controllers')
-      write_itema_to_files(items = results['service_interfaces'], classNameSuffix = "Service", output_dir = f'src/datasources/{sql_config['service']}/services/interfaces')
-      write_itema_to_files(items = results['service_implementations'], classNameSuffix = "ServiceImpl", output_dir = f'src/datasources/{sql_config['service']}/services/implementations')
+      write_items_to_files(items = results['entities'], classNameSuffix = "Entity", output_dir = f'src/datasources/{sql_config['service']}/entities')
+      write_items_to_files(items = results['dto'], classNameSuffix = "Dto", output_dir = f'src/datasources/{sql_config['service']}/dto')
+      write_items_to_files(items = results['typescript_types_classes'], makeFileName = lambda n: f"{singularize_word(n)}.types.ts", output_dir = f'src/datasources/{sql_config['service']}/typescript')
+      write_items_to_files(items = results['repositories'], classNameSuffix = "Repository", output_dir = f'src/datasources/{sql_config['service']}/repositories')
+      write_items_to_files(items = results['controllers'], classNameSuffix = "Controller", output_dir = f'src/datasources/{sql_config['service']}/controllers')
+      write_items_to_files(items = results['service_interfaces'], classNameSuffix = "Service", output_dir = f'src/datasources/{sql_config['service']}/services/interfaces')
+      write_items_to_files(items = results['service_implementations'], classNameSuffix = "ServiceImpl", output_dir = f'src/datasources/{sql_config['service']}/services/implementations')
       
+      write_to_file(contents = results['main_datasource_config'], path_full = f'src/configs/DatasourceJpaConfig{make_class_name(sql_config['service'], False)}Db.java')
       write_to_file(contents = results['main_service_interface'], path_full = f'src/services/interfaces/{make_class_name(sql_config['service'], False)}Service.java')
       write_to_file(contents = results['main_service_implementation'], path_full = f'src/services/implementations/{make_class_name(sql_config['service'], False)}ServiceImpl.java')
       write_to_file(contents = results['main_controller'], path_full = f'src/controllers/{make_class_name(sql_config['service'], False)}Controller.java')
