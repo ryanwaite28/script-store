@@ -150,7 +150,7 @@ def generate_service_interface_implementation(table_name, columns, app_package_p
           entity.set{snake_to_camel(col_name.capitalize())}({ "UUID.fromString(" if java_type == "UUID" else "" }dto.get{snake_to_camel(col_name.capitalize())}(){ ")" if java_type == "UUID" else "" });
       }}""")
         
-        search_predicates.append(f"if (params.{snake_to_camel(col_name)}() != null) {{\n                predicates.add(cb.equal(root.get(\"{col_name}\"), params.{snake_to_camel(col_name)}()));\n            }}")
+        search_predicates.append(f"if (params.{snake_to_camel(col_name)}() != null) {{\n                predicates.add(cb.equal(root.get(\"{snake_to_camel(col_name)}\"), params.{snake_to_camel(col_name)}()));\n            }}")
         
     
     return f"""\
@@ -478,7 +478,7 @@ import java.util.UUID;
 
 
 @Repository
-public interface {class_name}Repository extends JpaRepository<{class_name}Entity, UUID>, JpaSpecificationExecutor<{class_name}> {{}}
+public interface {class_name}Repository extends JpaRepository<{class_name}Entity, UUID>, JpaSpecificationExecutor<{class_name}Entity> {{}}
 
 """
 
@@ -537,8 +537,8 @@ public class {class_name}Controller {{
         return this.{var_name}Service.search{class_name}(new {class_name}SearchParams(
 {",\n".join([ f"            {f}" for f in service_arguments])},
             
-            limit != null ? limit : 10, 
-            offset != null ? offset : 0
+            offset != null ? offset : 0,
+            limit != null ? limit : 10
         ));
     }}
     
