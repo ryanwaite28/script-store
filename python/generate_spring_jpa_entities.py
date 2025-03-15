@@ -272,6 +272,7 @@ def generate_main_service_interface_implementation(service_name, package_prefix,
     return f"""\
 package {package_prefix}.services.implementations;
 
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import {package_prefix}.services.interfaces.{class_name}Service;
 import {datasources_package_prefix}.entities.*;
