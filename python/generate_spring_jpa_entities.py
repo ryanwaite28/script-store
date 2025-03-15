@@ -203,20 +203,20 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
 {"\n".join([ f"            {s}" for s in search_predicates])}
             
             return cb.and(predicates.toArray(new Predicate[0]));
-            
         }};
         
         Page<{class_name}Entity> pageResults = this.{var_name}Repository.findAll(spec, pageable);
         
+        List<{class_name}Dto> resultsData = pageResults.getContent().stream().map({class_name}Dto::fromEntity).toList();
         Integer offset = pageResults.getNumber();
         Integer limit = pageResults.getSize();
         Integer page = pageResults.getNumber();
         Integer pages = pageResults.getTotalPages();
-        Long resultsCount = pageResults.getTotalElements();
+        Long resultsCount = resultsData.size();
         Long tableCount = this.{var_name}Repository.count();
         
         return new PaginationResponse<>(
-            pageResults.stream().map({class_name}Dto::fromEntity).toList(),
+            resultsData,
             resultsCount,
             tableCount,
             offset,
