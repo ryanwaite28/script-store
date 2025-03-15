@@ -380,6 +380,7 @@ def generate_repository(table_name, columns, package_prefix):
     return f"""\
 package {package_prefix}.repositories;
 
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 import {package_prefix}.entities.{class_name}Entity;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -388,7 +389,7 @@ import java.util.UUID;
 
 
 @Repository
-public interface {class_name}Repository extends JpaRepository<{class_name}Entity, UUID> {{}}
+public interface {class_name}Repository extends JpaRepository<{class_name}Entity, UUID>, JpaSpecificationExecutor<{class_name}> {{}}
 
 """
 
