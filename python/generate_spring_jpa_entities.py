@@ -102,18 +102,22 @@ def sql_to_typescript_type(sql_type):
         return 'any'
 
 
-def generate_service_interface(table_name, package_prefix):
+def generate_service_interface(table_name, app_package_prefix, package_prefix):
     class_name = make_class_name(table_name)
     
     return f"""\
 package {package_prefix}.services.interfaces;
 
+import {app_package_prefix}.domain.responses.PaginationResponse;
 import {package_prefix}.dto.{class_name}Dto;
+import {package_prefix}.dto.searches.{class_name}SearchParams;
 import java.util.UUID;
 
 
 public interface {class_name}Service {{
   
+    PaginationResponse<{class_name}Dto> search{class_name}({class_name}SearchParams params);
+    
     {class_name}Dto getById(UUID id);
     
     {class_name}Dto create({class_name}Dto dto);
@@ -128,11 +132,14 @@ public interface {class_name}Service {{
 """
 
 
-def generate_service_interface_implementation(table_name, columns, package_prefix):
+def generate_service_interface_implementation(table_name, columns, app_package_prefix, package_prefix):
     class_name = make_class_name(table_name)
     var_name = class_name[0].lower() + class_name[1:]
     
+    
     patch_statements = []
+    
+    search_predicates = []
     
     for col_name, data_type in columns.items():
         java_type = sql_to_java_type(data_type)
@@ -142,18 +149,31 @@ def generate_service_interface_implementation(table_name, columns, package_prefi
       if (dto.get{snake_to_camel(col_name.capitalize())}() != null) {{
           entity.set{snake_to_camel(col_name.capitalize())}({ "UUID.fromString(" if java_type == "UUID" else "" }dto.get{snake_to_camel(col_name.capitalize())}(){ ")" if java_type == "UUID" else "" });
       }}""")
+        
+        search_predicates.append(f"if (params.{snake_to_camel(col_name)}() != null) {{\n                predicates.add(cb.equal(root.get(\"{col_name}\"), params.{snake_to_camel(col_name)}()));\n            }}")
+        
     
     return f"""\
 package {package_prefix}.services.implementations;
 
+import {app_package_prefix}.domain.responses.PaginationResponse;
+import {package_prefix}.dto.searches.{class_name}SearchParams;
 import {package_prefix}.services.interfaces.{class_name}Service;
 import {package_prefix}.entities.{class_name}Entity;
 import {package_prefix}.dto.{class_name}Dto;
 import {package_prefix}.repositories.{class_name}Repository;
 import org.springframework.stereotype.Service;
+import org.springframework.data.jpa.domain.Specification;
 import java.time.LocalDateTime;
 import java.util.UUID;
-
+import java.util.Map;
+import java.util.HashMap;
+import java.util.List;
+import java.util.ArrayList;
+import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 
 
@@ -168,6 +188,43 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
         this.{var_name}Repository = {var_name}Repository;
     }}
     
+    
+    
+    @Override
+    public PaginationResponse<{class_name}Dto> search{class_name}({class_name}SearchParams params) {{
+        if (params == null) {{
+            throw new IllegalArgumentException("Search params cannot be null");
+        }}
+        
+        Pageable pageable = PageRequest.of(params.offset(), params.limit());
+        Specification<{class_name}Entity> spec = (root, query, cb) -> {{
+            List<Predicate> predicates = new ArrayList<>();
+            
+{"\n".join([ f"            {s}" for s in search_predicates])}
+            
+            return cb.and(predicates.toArray(new Predicate[0]));
+            
+        }};
+        
+        Page<{class_name}Entity> pageResults = this.{var_name}Repository.findAll(spec, pageable);
+        
+        Integer offset = pageResults.getNumber();
+        Integer limit = pageResults.getSize();
+        Integer page = pageResults.getNumber();
+        Integer pages = pageResults.getTotalPages();
+        Long resultsCount = pageResults.getTotalElements();
+        Long tableCount = this.{var_name}Repository.count();
+        
+        return new PaginationResponse<>(
+            pageResults.stream().map({class_name}Dto::fromEntity).toList(),
+            resultsCount,
+            tableCount,
+            offset,
+            limit,
+            page,
+            pages
+        );
+    }}
     
     @Override
     public {class_name}Dto getById(UUID id) {{
@@ -272,8 +329,12 @@ def generate_main_service_interface_implementation(service_name, package_prefix,
     return f"""\
 package {package_prefix}.services.implementations;
 
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import {package_prefix}.services.interfaces.{class_name}Service;
 import {datasources_package_prefix}.entities.*;
 import {datasources_package_prefix}.dto.*;
@@ -375,6 +436,33 @@ public class {class_name}Dto {{
 }}
 """
 
+
+def generate_search_params_class(table_name, columns, package_prefix):
+    class_name = make_class_name(table_name)
+    
+    fields = []
+    
+    for col_name, data_type in columns.items():
+        java_type = sql_to_java_type(data_type)
+        fields.append(f"    {"String" if (java_type == "UUID") else java_type} {snake_to_camel(col_name)}")
+    
+    return f"""\
+package {package_prefix}.dto.searches;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+public record {class_name}SearchParams(
+{",\n".join([ f"{f}" for f in fields])},
+    Integer offset,
+    Integer limit
+) {{}}
+"""
+
+
+
+
+
 def generate_repository(table_name, columns, package_prefix):
     class_name = make_class_name(table_name)
 
@@ -394,9 +482,19 @@ public interface {class_name}Repository extends JpaRepository<{class_name}Entity
 
 """
 
-def generate_service_controller(table_name, service_name, app_package_prefix):
+def generate_service_controller(table_name, service_name, columns, app_package_prefix):
     class_name = make_class_name(table_name)
     url_name = '-'.join((table_name.split('.')[-1]).split('_'))
+    var_name = class_name[0].lower() + class_name[1:]
+    
+    request_params = []
+    service_arguments = []
+    
+    for col_name, data_type in columns.items():
+        java_type = sql_to_java_type(data_type)
+        field_var_name = snake_to_camel(col_name)
+        request_params.append(f"@RequestParam(value = \"{field_var_name}\", required = false) {"String" if (java_type == 'UUID') else f"String" if ("JSON" in data_type) else java_type} {field_var_name}")
+        service_arguments.append(f"{field_var_name}")
     
 
     return f"""\
@@ -404,11 +502,13 @@ package {app_package_prefix}.datasources.{service_name}.controllers;
 
 import {app_package_prefix}.datasources.{service_name}.services.interfaces.{class_name}Service;
 import {app_package_prefix}.datasources.{service_name}.dto.{class_name}Dto;
-
+import {app_package_prefix}.datasources.{service_name}.dto.searches.{class_name}SearchParams;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import {app_package_prefix}.domain.responses.PaginationResponse;
 import java.io.IOException;
 import java.util.UUID;
+import java.time.LocalDateTime;
 import {app_package_prefix}.domain.responses.DataResponse;
 
 
@@ -417,37 +517,54 @@ import {app_package_prefix}.domain.responses.DataResponse;
 // @RequestMapping("/{url_name}")
 public class {class_name}Controller {{
 
-    private final {class_name}Service {service_name}Service;
+    private final {class_name}Service {var_name}Service;
     
     public {class_name}Controller(
-      {class_name}Service {service_name}Service
+      {class_name}Service {var_name}Service
     ) {{
-        this.{service_name}Service = {service_name}Service;
+        this.{var_name}Service = {var_name}Service;
+    }}
+    
+    
+    
+    @GetMapping("/search")
+    public PaginationResponse<{class_name}Dto> searchInterviewAuthorities(
+{",\n".join([ f"        {f}" for f in request_params])},
+
+        @RequestParam(value = "offset", required = false) Integer offset,
+        @RequestParam(value = "limit", required = false) Integer limit
+    ) {{
+        return this.{var_name}Service.search{class_name}(new {class_name}SearchParams(
+{",\n".join([ f"            {f}" for f in service_arguments])},
+            
+            limit != null ? limit : 10, 
+            offset != null ? offset : 0
+        ));
     }}
     
     @GetMapping(value = "/{{id}}")
     public DataResponse<{class_name}Dto> getById(@PathVariable UUID id) {{
-        return new DataResponse<>(this.{service_name}Service.getById(id));
+        return new DataResponse<>(this.{var_name}Service.getById(id));
     }}
     
     @PostMapping
     public DataResponse<{class_name}Dto> create(@RequestBody {class_name}Dto dto) {{
-        return new DataResponse<>(this.{service_name}Service.create(dto));
+        return new DataResponse<>(this.{var_name}Service.create(dto));
     }}
     
     @PutMapping(value = "/{{id}}")
     public DataResponse<{class_name}Dto> update(@PathVariable UUID id, @RequestBody {class_name}Dto dto) {{
-        return new DataResponse<>(this.{service_name}Service.update(id, dto));
+        return new DataResponse<>(this.{var_name}Service.update(id, dto));
     }}
     
     @PatchMapping(value = "/{{id}}")
     public DataResponse<{class_name}Dto> patch(@PathVariable UUID id, @RequestBody {class_name}Dto dto) {{
-        return new DataResponse<>(this.{service_name}Service.patch(id, dto));
+        return new DataResponse<>(this.{var_name}Service.patch(id, dto));
     }}
     
     @DeleteMapping(value = "/{{id}}")
     public DataResponse<{class_name}Dto> delete(@PathVariable UUID id) {{
-        return new DataResponse<>(this.{service_name}Service.delete(id));
+        return new DataResponse<>(this.{var_name}Service.delete(id));
     }}
     
 
@@ -678,6 +795,7 @@ def parse_sql_file(sql_config):
     service_interfaces = {}
     service_implementations = {}
     controllers = {}
+    search_params = {}
     import_configs: list = []
     
     for table_name, columns_def in table_definitions:
@@ -707,10 +825,11 @@ def parse_sql_file(sql_config):
         entities[table_name] = generate_entity_class(table_name, columns, datasources_package_prefix)
         dto[table_name] = generate_dto(table_name, columns, datasources_package_prefix)
         repositories[table_name] = generate_repository(table_name, columns, datasources_package_prefix)
-        service_interfaces[table_name] = generate_service_interface(table_name, datasources_package_prefix)
-        service_implementations[table_name] = generate_service_interface_implementation(table_name, columns, datasources_package_prefix)
-        controllers[table_name] = generate_service_controller(table_name, service_name, app_package_prefix)
+        service_interfaces[table_name] = generate_service_interface(table_name, app_package_prefix, datasources_package_prefix)
+        service_implementations[table_name] = generate_service_interface_implementation(table_name, columns, app_package_prefix, datasources_package_prefix)
+        controllers[table_name] = generate_service_controller(table_name, service_name, columns, app_package_prefix)
         typescript_types_classes[table_name] = generate_typescript_types_classes(table_name, columns)
+        search_params[table_name] = generate_search_params_class(table_name, columns, datasources_package_prefix)
         
         import_configs_by_table = generate_main_service_import_config(table_name, datasources_package_prefix)
         import_configs.append(import_configs_by_table)
@@ -723,6 +842,7 @@ def parse_sql_file(sql_config):
     return {
       'entities': entities,
       'dto': dto,
+      'search_params': search_params,
       'typescript_types_classes': typescript_types_classes,
       'repositories': repositories,
       'controllers': controllers,
@@ -758,6 +878,66 @@ def write_items_to_files(items: list, output_dir: str, classNameSuffix: str = No
 
 
 
+
+def create_helper_classes(package_prefix):
+    pagination_response_class = f"""\
+package {package_prefix}.domain.responses;
+
+import lombok.Data;
+import lombok.Builder;
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
+
+import java.util.List;
+
+public record PaginationResponse<T> (
+    List<T> data,
+    Long resultsCount,
+    Long tableCount,
+    Integer offset,
+    Integer limit,
+    Integer page,
+    Integer pages
+) {{ }}
+"""
+    write_to_file(contents = pagination_response_class, path_full = f'src/domain/responses/PaginationResponse.java')
+    
+    
+    data_response_class = f"""\
+package {package_prefix}.domain.responses;
+
+import lombok.Data;
+import lombok.Builder;
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
+
+import java.util.List;
+
+public record DataResponse<T>(T data) {{ }}
+"""
+    write_to_file(contents = data_response_class, path_full = f'src/domain/responses/DataResponse.java')
+    
+    
+    results_response_class = f"""\
+package {package_prefix}.domain.responses;
+
+import lombok.Data;
+import lombok.Builder;
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
+
+import java.util.List;
+
+public record ResultsResponse<T>(
+    T data,
+    boolean error,
+    String message
+) {{ }}
+"""
+    write_to_file(contents = results_response_class, path_full = f'src/domain/responses/ResultsResponse.java')
+
+
+
 if __name__ == "__main__":
     """
     SQL file table definitions are expected to be in the following format:
@@ -776,14 +956,16 @@ if __name__ == "__main__":
         deleted_at_utc TIMESTAMP DEFAULT NULL
     );
     """
-    
+  
     sql_configs = [
       # format: { "service": "service_name", "sql_path": "full/path/to/sql_file.sql" }
-      
     ]
     
     if os.path.exists("src"):
       shutil.rmtree("src")
+      
+      
+    create_helper_classes("com.modernapps.maverick.gateway_api")
       
     for sql_config in sql_configs:
       # print("processing: ", sql_configs)
@@ -797,6 +979,7 @@ if __name__ == "__main__":
       write_items_to_files(items = results['controllers'], classNameSuffix = "Controller", output_dir = f'src/datasources/{sql_config['service']}/controllers')
       write_items_to_files(items = results['service_interfaces'], classNameSuffix = "Service", output_dir = f'src/datasources/{sql_config['service']}/services/interfaces')
       write_items_to_files(items = results['service_implementations'], classNameSuffix = "ServiceImpl", output_dir = f'src/datasources/{sql_config['service']}/services/implementations')
+      write_items_to_files(items = results['search_params'], classNameSuffix = "SearchParams", output_dir = f'src/datasources/{sql_config['service']}/dto/searches')
       
       write_to_file(contents = results['main_datasource_config'], path_full = f'src/configs/DatasourceJpaConfig{make_class_name(sql_config['service'], False)}Db.java')
       write_to_file(contents = results['main_service_interface'], path_full = f'src/services/interfaces/{make_class_name(sql_config['service'], False)}Service.java')
