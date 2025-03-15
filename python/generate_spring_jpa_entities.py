@@ -757,6 +757,24 @@ def write_items_to_files(items: list, output_dir: str, classNameSuffix: str = No
 
 
 if __name__ == "__main__":
+    """
+    SQL file table definitions are expected to be in the following format:
+    
+    CREATE TABLE IF NOT EXISTS {table_name} (
+        {column_name} {data_type in UPPERCASE} NOT NULL etc...,
+    );
+    
+    Example:
+    
+    CREATE TABLE IF NOT EXISTS users (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        metadata JSONB DEFAULT NULL,
+        created_at_utc TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at_utc TIMESTAMP DEFAULT NULL,
+        deleted_at_utc TIMESTAMP DEFAULT NULL
+    );
+    """
+    
     sql_configs = [
       # format: { "service": "service_name", "sql_path": "full/path/to/sql_file.sql" }
       
