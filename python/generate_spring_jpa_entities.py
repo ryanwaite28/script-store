@@ -719,7 +719,7 @@ public class {class_name}Controller {{
     @JwtAuthorized
     @PostMapping
     public DataResponse<{class_name}Dto> create(
-      @RequestAttribute("AUTH_USER") UUID userId,
+      @RequestAttribute("AUTH_USER_ID") UUID userId,
       @RequestBody {class_name}Dto dto
     ) {{
         return new DataResponse<>(this.{var_name}Service.create(userId, dto));
@@ -728,7 +728,7 @@ public class {class_name}Controller {{
     @JwtAuthorized
     @PutMapping(value = "/{{id}}")
     public DataResponse<{class_name}Dto> update(
-      @RequestAttribute("AUTH_USER") UUID userId,
+      @RequestAttribute("AUTH_USER_ID") UUID userId,
       @PathVariable UUID id, 
       @RequestBody {class_name}Dto dto
     ) {{
@@ -738,7 +738,7 @@ public class {class_name}Controller {{
     @JwtAuthorized
     @PatchMapping(value = "/{{id}}")
     public DataResponse<{class_name}Dto> patch(
-      @RequestAttribute("AUTH_USER") UUID userId,
+      @RequestAttribute("AUTH_USER_ID") UUID userId,
       @PathVariable UUID id, 
       @RequestBody {class_name}Dto dto
     ) {{
@@ -748,7 +748,7 @@ public class {class_name}Controller {{
     @JwtAuthorized
     @DeleteMapping(value = "/{{id}}")
     public DataResponse<{class_name}Dto> delete(
-      @RequestAttribute("AUTH_USER") UUID userId,
+      @RequestAttribute("AUTH_USER_ID") UUID userId,
       @PathVariable UUID id
     ) {{
         return new DataResponse<>(this.{var_name}Service.delete(userId, id));
