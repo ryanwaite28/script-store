@@ -1007,7 +1007,7 @@ public class {class_name}Entity {{
 def parse_sql_file(sql_config, app_package_prefix):
     service_name = sql_config['service']
     sql_file_path = sql_config['sql_path']
-    datasources_package_prefix = f"com.modernapps.maverick.gateway_api.datasources.{sql_config['service']}"
+    datasources_package_prefix = f"<enter_app_package_prefix>.datasources.{sql_config['service']}"
   
   
     with open(sql_file_path, 'r') as sql_file:
@@ -1227,7 +1227,7 @@ public class CoerceUtils {{
     common_utils = f"""\
 package {package_prefix}.utils;
 
-package com.modernapps.maverick.gateway_api.utils;
+package <enter_app_package_prefix>.utils;
 
 import lombok.NonNull;
 import org.springframework.web.multipart.MultipartFile;
@@ -1688,7 +1688,7 @@ if __name__ == "__main__":
     );
     """
     
-    app_package_prefix = f"com.modernapps.maverick.gateway_api"
+    app_package_prefix = f"<enter_app_package_prefix>"
   
     sql_configs = [
       # format: { "service": "service_name", "sql_path": "full/path/to/sql_file.sql" }
@@ -1699,7 +1699,7 @@ if __name__ == "__main__":
       shutil.rmtree("src")
       
       
-    create_helper_classes("com.modernapps.maverick.gateway_api")
+    create_helper_classes("<enter_app_package_prefix>")
     
     main_services_enum = generate_main_services_enum([ c['service'] for c in sql_configs ], app_package_prefix)
     write_to_file(contents = main_services_enum, path_full = f'src/enums/ServiceNames.java')
