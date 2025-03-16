@@ -153,6 +153,7 @@ def generate_service_interface_implementation(table_name, columns, app_package_p
     
     
     patch_statements = []
+    update_statements = []
     
     search_predicates = []
     
@@ -161,11 +162,13 @@ def generate_service_interface_implementation(table_name, columns, app_package_p
         if col_name == 'id':
             continue
         patch_statements.append(f"""
-      if (dto.get{snake_to_camel(col_name.capitalize())}() != null) {{
-          entity.set{snake_to_camel(col_name.capitalize())}({ "UUID.fromString(" if java_type == "UUID" else "" }dto.get{snake_to_camel(col_name.capitalize())}(){ ")" if java_type == "UUID" else "" });
-      }}""")
+        if (dto.get{snake_to_camel(col_name.capitalize())}() != null) {{
+            entity.set{snake_to_camel(col_name.capitalize())}({ "UUID.fromString(" if java_type == "UUID" else "" }dto.get{snake_to_camel(col_name.capitalize())}(){ ")" if java_type == "UUID" else "" });
+        }}""")
         
         search_predicates.append(f"if (params.{snake_to_camel(col_name)}() != null) {{\n                predicates.add(cb.equal(root.get(\"{snake_to_camel(col_name)}\"), params.{snake_to_camel(col_name)}()));\n            }}")
+        
+        update_statements.append(f"""entity.set{snake_to_camel(col_name.capitalize())}({ f"dto.get{snake_to_camel(col_name.capitalize())}() == null ? null : " if java_type == "UUID" else "" }{ "UUID.fromString(" if java_type == "UUID" else "" }dto.get{snake_to_camel(col_name.capitalize())}(){ ")" if java_type == "UUID" else "" });""")
         
     
     return f"""\
@@ -252,65 +255,74 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
     
     @Override
     public {class_name}Dto create(UUID userId, {class_name}Dto dto) {{
-      if (dto == null) {{
-        throw new IllegalArgumentException("DTO cannot be null");
-      }}
-      {class_name}Entity entity = {class_name}Dto.toEntity(dto);
-      return {class_name}Dto.fromEntity(this.{var_name}Repository.save(entity));
+        this.validate{class_name}Dto(dto);
+        
+        // using builder to control which fields are set for creation
+        {class_name}Entity entity = {class_name}Dto.toEntity(
+            {class_name}Dto.builder()
+{'\n'.join([f"                .{snake_to_camel(col_name)}(dto.get{snake_to_camel(col_name.capitalize())}())" for col_name, data_type in columns.items()])}
+                .build()
+        );
+        
+        return {class_name}Dto.fromEntity(this.{var_name}Repository.save(entity));
     }}
     
     @Override
     public {class_name}Dto update(UUID userId, UUID id, {class_name}Dto dto) {{
-      if (dto == null) {{
-        throw new IllegalArgumentException("DTO cannot be null");
-      }}
-      
-      {class_name}Entity entity = this.{var_name}Repository.findById(id).orElse(null);
-      if (entity == null || entity.getDeletedAtUtc() != null) {{
-          throw new IllegalArgumentException("Entity with id " + id + " does not exist");
-      }}
-      if (!id.equals(entity.getId())) {{
-        throw new IllegalArgumentException("Entity ID does not match path ID");
-      }}
-      
-      {class_name}Entity savingEntity = {class_name}Dto.toEntity(dto);
-      savingEntity.setId(entity.getId());
-      savingEntity.setUpdatedAtUtc(LocalDateTime.now());
-  
-      return {class_name}Dto.fromEntity(this.{var_name}Repository.save(savingEntity));
+        this.validate{class_name}Dto(dto);
+        
+        {class_name}Entity entity = this.{var_name}Repository.findById(id).orElse(null);
+        if (entity == null || entity.getDeletedAtUtc() != null) {{
+            throw new IllegalArgumentException("Entity with id " + id + " does not exist");
+        }}
+
+        // manually setting entity fields for update to control which fields are updated
+{"\n".join([ f"        {s}" for s in update_statements])}
+
+        entity.setUpdatedAtUtc(LocalDateTime.now());
+    
+        return {class_name}Dto.fromEntity(this.{var_name}Repository.save(entity));
     }}
     
     @Override
     public {class_name}Dto patch(UUID userId, UUID id, {class_name}Dto dto){{
-      if (dto == null) {{
-        throw new IllegalArgumentException("DTO cannot be null");
-      }}
-      
-      {class_name}Entity entity = this.{var_name}Repository.findById(id).orElse(null);
-      if (entity == null || entity.getDeletedAtUtc() != null) {{
-          throw new IllegalArgumentException("Entity with id " + id + " does not exist");
-      }}
-      
-      {"".join(patch_statements)}
-      
-      entity.setUpdatedAtUtc(LocalDateTime.now());
-      
-      return {class_name}Dto.fromEntity(this.{var_name}Repository.save(entity));
+        if (dto == null) {{
+            throw new IllegalArgumentException("DTO cannot be null");
+        }}
+        
+        {class_name}Entity entity = this.{var_name}Repository.findById(id).orElse(null);
+        if (entity == null || entity.getDeletedAtUtc() != null) {{
+            throw new IllegalArgumentException("Entity with id " + id + " does not exist");
+        }}
+        
+        {"".join(patch_statements)}
+        
+        entity.setUpdatedAtUtc(LocalDateTime.now());
+        
+        return {class_name}Dto.fromEntity(this.{var_name}Repository.save(entity));
     }}
     
     @Override
     public {class_name}Dto delete(UUID userId, UUID id) {{
-      if (id == null) {{
-        throw new IllegalArgumentException("ID cannot be null");
-      }}
-      
-      {class_name}Entity entity = this.{var_name}Repository.findById(id).orElse(null);
-      if (entity == null || entity.getDeletedAtUtc() != null) {{
-          throw new IllegalArgumentException("Entity with id " + id + " does not exist");
-      }}
-      
-      entity.setDeletedAtUtc(LocalDateTime.now());
-      return {class_name}Dto.fromEntity(this.{var_name}Repository.save(entity));
+        if (id == null) {{
+            throw new IllegalArgumentException("ID cannot be null");
+        }}
+        
+        {class_name}Entity entity = this.{var_name}Repository.findById(id).orElse(null);
+        if (entity == null || entity.getDeletedAtUtc() != null) {{
+            throw new IllegalArgumentException("Entity with id " + id + " does not exist");
+        }}
+        
+        entity.setDeletedAtUtc(LocalDateTime.now());
+        return {class_name}Dto.fromEntity(this.{var_name}Repository.save(entity));
+    }}
+    
+    
+    private void validate{class_name}Dto({class_name}Dto dto) {{
+        if (dto == null) {{
+            throw new IllegalArgumentException("DTO cannot be null");
+        }}
+        
     }}
   
 }}
@@ -1029,7 +1041,7 @@ public class {class_name}Entity {{
 def parse_sql_file(sql_config, app_package_prefix):
     service_name = sql_config['service']
     sql_file_path = sql_config['sql_path']
-    datasources_package_prefix = f"<enter_app_package_prefix>.datasources.{sql_config['service']}"
+    datasources_package_prefix = f"<enter_package_name>.datasources.{sql_config['service']}"
   
   
     with open(sql_file_path, 'r') as sql_file:
@@ -1708,7 +1720,7 @@ if __name__ == "__main__":
     );
     """
     
-    app_package_prefix = f"<enter_app_package_prefix>"
+    app_package_prefix = f"<enter_package_name>"
   
     sql_configs = [
       # format: { "service": "service_name", "sql_path": "full/path/to/sql_file.sql" }
@@ -1718,7 +1730,7 @@ if __name__ == "__main__":
       shutil.rmtree("src")
       
       
-    create_helper_classes("<enter_app_package_prefix>")
+    create_helper_classes("<enter_package_name>")
     
     main_services_enum = generate_main_services_enum([ c['service'] for c in sql_configs ], app_package_prefix)
     write_to_file(contents = main_services_enum, path_full = f'src/enums/ServiceNames.java')
