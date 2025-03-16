@@ -255,7 +255,7 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
     
     @Override
     public {class_name}Dto create(UUID userId, {class_name}Dto dto) {{
-        this.validate{class_name}Dto(dto);
+        this.validateCreate{class_name}Dto(dto);
         
         // using builder to control which fields are set for creation
         {class_name}Entity entity = {class_name}Dto.toEntity(
@@ -269,7 +269,7 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
     
     @Override
     public {class_name}Dto update(UUID userId, UUID id, {class_name}Dto dto) {{
-        this.validate{class_name}Dto(dto);
+        this.validateUpdate{class_name}Dto(dto);
         
         {class_name}Entity entity = this.{var_name}Repository.findById(id).orElse(null);
         if (entity == null || entity.getDeletedAtUtc() != null) {{
@@ -286,9 +286,7 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
     
     @Override
     public {class_name}Dto patch(UUID userId, UUID id, {class_name}Dto dto){{
-        if (dto == null) {{
-            throw new IllegalArgumentException("DTO cannot be null");
-        }}
+        this.validateUpdate{class_name}Dto(dto);
         
         {class_name}Entity entity = this.{var_name}Repository.findById(id).orElse(null);
         if (entity == null || entity.getDeletedAtUtc() != null) {{
@@ -318,17 +316,28 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
     }}
     
     
-    private void validate{class_name}Dto({class_name}Dto dto) {{
+    private void validateCreate{class_name}({class_name}Dto dto) {{
         if (dto == null) {{
             throw new IllegalArgumentException("DTO cannot be null");
         }}
         
+        if (dto.getId() != null) {{
+            throw new IllegalArgumentException("ID must be null");
+        }}
+    }}
+    
+    private void validateUpdate{class_name}({class_name}Dto dto) {{
+        if (dto == null) {{
+            throw new IllegalArgumentException("DTO cannot be null");
+        }}
+        
+        if (dto.getId() == null) {{
+            throw new IllegalArgumentException("ID must be null");
+        }}
     }}
   
 }}
 """
-
-
 
 
 def generate_main_service_interface(service_name, package_prefix, import_configs, datasources_package_prefix):
