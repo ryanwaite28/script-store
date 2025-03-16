@@ -135,13 +135,13 @@ public interface {class_name}Service {{
     
     {class_name}Dto getById(UUID id);
     
-    {class_name}Dto create({class_name}Dto dto);
+    {class_name}Dto create(UUID userId, {class_name}Dto dto);
     
-    {class_name}Dto update(UUID id, {class_name}Dto dto);
+    {class_name}Dto update(UUID userId, UUID id, {class_name}Dto dto);
     
-    {class_name}Dto patch(UUID id, {class_name}Dto dto);
+    {class_name}Dto patch(UUID userId, UUID id, {class_name}Dto dto);
     
-    {class_name}Dto delete(UUID id);
+    {class_name}Dto delete(UUID userId, UUID id);
   
 }}
 """
@@ -227,8 +227,8 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
         Integer limit = pageResults.getSize();
         Integer page = pageResults.getNumber();
         Integer pages = pageResults.getTotalPages();
-        Long resultsCount = resultsData.size();
-        Long tableCount = this.{var_name}Repository.count();
+        Integer resultsCount = resultsData.size();
+        Long tableCount = pageResults.getTotalElements();
         
         return new PaginationResponse<>(
             resultsData,
@@ -251,7 +251,7 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
     }}
     
     @Override
-    public {class_name}Dto create({class_name}Dto dto) {{
+    public {class_name}Dto create(UUID userId, {class_name}Dto dto) {{
       if (dto == null) {{
         throw new IllegalArgumentException("DTO cannot be null");
       }}
@@ -260,7 +260,7 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
     }}
     
     @Override
-    public {class_name}Dto update(UUID id, {class_name}Dto dto) {{
+    public {class_name}Dto update(UUID userId, UUID id, {class_name}Dto dto) {{
       if (dto == null) {{
         throw new IllegalArgumentException("DTO cannot be null");
       }}
@@ -281,7 +281,7 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
     }}
     
     @Override
-    public {class_name}Dto patch(UUID id, {class_name}Dto dto){{
+    public {class_name}Dto patch(UUID userId, UUID id, {class_name}Dto dto){{
       if (dto == null) {{
         throw new IllegalArgumentException("DTO cannot be null");
       }}
@@ -299,7 +299,7 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
     }}
     
     @Override
-    public {class_name}Dto delete(UUID id) {{
+    public {class_name}Dto delete(UUID userId, UUID id) {{
       if (id == null) {{
         throw new IllegalArgumentException("ID cannot be null");
       }}
@@ -588,12 +588,12 @@ def generate_error_codes(table_name, app_package_prefix, package_prefix):
         return error_code_counter
     
     return f"""\
-package {package_prefix}.exceptions;
+package {package_prefix}.enums.errorcodes;
 
 import {app_package_prefix}.interfaces.ErrorCode;
 import lombok.Getter;
 
-public enum {class_name}ErroCodes implements ErrorCode {{
+public enum {class_name}ErrorCodes implements ErrorCode {{
     
     NotFound({increment_error_code()}, "{rot13_codec(class_name)}", "{class_name} not found"),
     CreateFailed({increment_error_code()}, "{rot13_codec(class_name)}", "{class_name} data could not be created"),
@@ -620,7 +620,7 @@ public enum {class_name}ErroCodes implements ErrorCode {{
     @Getter
     private String errorMessage;
 
-    {class_name}ErroCodes(int errorId, String errorClass, String errorMessage) {{
+    {class_name}ErrorCodes(int errorId, String errorClass, String errorMessage) {{
         this.errorId = errorId;
         this.errorClass = errorClass;
         this.errorMessage = errorMessage;
@@ -668,6 +668,7 @@ def generate_service_controller(table_name, service_name, columns, app_package_p
     return f"""\
 package {app_package_prefix}.datasources.{service_name}.controllers;
 
+import {app_package_prefix}.configs.jwt.JwtAuthorized;
 import {app_package_prefix}.datasources.{service_name}.services.interfaces.{class_name}Service;
 import {app_package_prefix}.datasources.{service_name}.dto.{class_name}Dto;
 import {app_package_prefix}.datasources.{service_name}.dto.searches.{class_name}SearchParams;
@@ -715,24 +716,42 @@ public class {class_name}Controller {{
         return new DataResponse<>(this.{var_name}Service.getById(id));
     }}
     
+    @JwtAuthorized
     @PostMapping
-    public DataResponse<{class_name}Dto> create(@RequestBody {class_name}Dto dto) {{
-        return new DataResponse<>(this.{var_name}Service.create(dto));
+    public DataResponse<{class_name}Dto> create(
+      @RequestAttribute("AUTH_USER") UUID userId,
+      @RequestBody {class_name}Dto dto
+    ) {{
+        return new DataResponse<>(this.{var_name}Service.create(userId, dto));
     }}
     
+    @JwtAuthorized
     @PutMapping(value = "/{{id}}")
-    public DataResponse<{class_name}Dto> update(@PathVariable UUID id, @RequestBody {class_name}Dto dto) {{
-        return new DataResponse<>(this.{var_name}Service.update(id, dto));
+    public DataResponse<{class_name}Dto> update(
+      @RequestAttribute("AUTH_USER") UUID userId,
+      @PathVariable UUID id, 
+      @RequestBody {class_name}Dto dto
+    ) {{
+        return new DataResponse<>(this.{var_name}Service.update(userId, id, dto));
     }}
     
+    @JwtAuthorized
     @PatchMapping(value = "/{{id}}")
-    public DataResponse<{class_name}Dto> patch(@PathVariable UUID id, @RequestBody {class_name}Dto dto) {{
-        return new DataResponse<>(this.{var_name}Service.patch(id, dto));
+    public DataResponse<{class_name}Dto> patch(
+      @RequestAttribute("AUTH_USER") UUID userId,
+      @PathVariable UUID id, 
+      @RequestBody {class_name}Dto dto
+    ) {{
+        return new DataResponse<>(this.{var_name}Service.patch(userId, id, dto));
     }}
     
+    @JwtAuthorized
     @DeleteMapping(value = "/{{id}}")
-    public DataResponse<{class_name}Dto> delete(@PathVariable UUID id) {{
-        return new DataResponse<>(this.{var_name}Service.delete(id));
+    public DataResponse<{class_name}Dto> delete(
+      @RequestAttribute("AUTH_USER") UUID userId,
+      @PathVariable UUID id
+    ) {{
+        return new DataResponse<>(this.{var_name}Service.delete(userId, id));
     }}
     
 
@@ -1141,7 +1160,7 @@ import java.util.List;
 
 public record PaginationResponse<T> (
     List<T> data,
-    Long resultsCount,
+    Integer resultsCount,
     Long tableCount,
     Integer offset,
     Integer limit,
@@ -1226,8 +1245,6 @@ public class CoerceUtils {{
     
     common_utils = f"""\
 package {package_prefix}.utils;
-
-package <enter_app_package_prefix>.utils;
 
 import lombok.NonNull;
 import org.springframework.web.multipart.MultipartFile;
@@ -1656,9 +1673,9 @@ package {package_prefix}.interfaces;
 
 public interface ErrorCode {{
   
-  int errorCode;
-  String errorClass;
-  String errorMessage;
+  Integer errorCode = null;
+  String errorClass = null;
+  String errorMessage = null;
 
 }}
 """
@@ -1692,7 +1709,6 @@ if __name__ == "__main__":
   
     sql_configs = [
       # format: { "service": "service_name", "sql_path": "full/path/to/sql_file.sql" }
-      
     ]
     
     if os.path.exists("src"):
@@ -1722,7 +1738,7 @@ if __name__ == "__main__":
       write_items_to_files(items = results['model_event_enums'], classNameSuffix = "ModelEvents", output_dir = f'src/datasources/{sql_config['service']}/enums/models')
       write_items_to_files(items = results['not_found_exceptions'], classNameSuffix = "NotFoundException", output_dir = f'src/datasources/{sql_config['service']}/exceptions')
       write_items_to_files(items = results['invalid_data_exceptions'], classNameSuffix = "InvalidDataException", output_dir = f'src/datasources/{sql_config['service']}/exceptions')
-      write_items_to_files(items = results['error_codes'], classNameSuffix = "ErrorCodes", output_dir = f'src/datasources/{sql_config['service']}/enums/errors')
+      write_items_to_files(items = results['error_codes'], classNameSuffix = "ErrorCodes", output_dir = f'src/datasources/{sql_config['service']}/enums/errorcodes')
       
       write_to_file(contents = results['main_datasource_config'], path_full = f'src/configs/DatasourceJpaConfig{use_service_name}Db.java')
       write_to_file(contents = results['main_service_interface'], path_full = f'src/services/interfaces/{use_service_name}Service.java')
