@@ -414,6 +414,8 @@ def generate_dto(table_name, columns, package_prefix):
     return f"""\
 package {package_prefix}.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import {package_prefix}.entities.{class_name}Entity;
 import lombok.Data;
 import lombok.Builder;
@@ -426,6 +428,7 @@ import java.util.UUID;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class {class_name}Dto {{
 
 {"\n".join(fields)}
