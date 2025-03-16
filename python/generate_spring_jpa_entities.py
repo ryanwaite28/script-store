@@ -2,7 +2,17 @@
 # to generate spring jpa entities from sql files
 # the code is not perfect, but it's a good starting point
 
-import re, os, shutil
+import re, os, shutil, codecs
+
+
+
+error_code_counter = 0
+
+
+
+def rot13_codec(text):
+  """Encrypts or decrypts text using ROT13 via the codecs module."""
+  return codecs.encode(text, 'rot13')
 
 def singularize_word(word):
     """
@@ -49,6 +59,11 @@ def singularize_word(word):
     else:
         return word # If no rule applies, return the original word
 
+
+def snake_to_camel(snake_string):
+    components = snake_string.split('_')
+    return components[0] + ''.join(x.title() for x in components[1:])
+  
 def make_class_name(table_name, singularize = True):
   table_name_split = (table_name.split('.')[-1]).split('_')
   # print("[make_class_name] before", table_name_split)
@@ -210,7 +225,7 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
         List<{class_name}Dto> resultsData = pageResults.getContent().stream().map({class_name}Dto::fromEntity).toList();
         Integer offset = pageResults.getNumber();
         Integer limit = pageResults.getSize();
-        Integer page = pageResults.getNumber() + 1;
+        Integer page = pageResults.getNumber();
         Integer pages = pageResults.getTotalPages();
         Long resultsCount = resultsData.size();
         Long tableCount = this.{var_name}Repository.count();
@@ -460,8 +475,161 @@ public record {class_name}SearchParams(
 """
 
 
+def generate_model_names_enum(service_name, table_names, app_package_prefix):
+    use_service_name = make_class_name(service_name, False)
+    enum_values = []
+    
+    for table_name in table_names:
+        enum_values.append(f"    {singularize_word(table_name.split('.')[1]).upper()}")
+    
+    return f"""\
+package {app_package_prefix}.domain.enums;
+
+public enum {use_service_name}ModelNames {{
+{",\n".join(enum_values)},
+    ;
+    
+    public static {use_service_name}ModelNames fromString(String name) {{
+        for ({use_service_name}ModelNames model : {use_service_name}ModelNames.values()) {{
+            if (model.name().equalsIgnoreCase(name)) {{
+                return model;
+            }}
+        }}
+        return null;
+    }}
+}}
+"""
 
 
+def generate_model_events_enum(table_name, columns, package_prefix):
+    class_name = make_class_name(table_name)
+    enum_value_name = singularize_word(table_name.split('.')[-1]).upper()
+    
+    enum_values_per_field = []
+    
+    for col_name, data_type in columns.items():
+        java_type = sql_to_java_type(data_type)
+        enum_values_per_field.append(f"    {enum_value_name}_{col_name.upper()}_CREATED")
+        enum_values_per_field.append(f"    {enum_value_name}_{col_name.upper()}_UPDATED")
+        enum_values_per_field.append(f"    {enum_value_name}_{col_name.upper()}_DELETED")
+    
+    return f"""\
+package {package_prefix}.domain.enums.models;
+
+public enum {class_name}ModelEvents {{
+    {enum_value_name}_CREATED,
+    {enum_value_name}_UPDATED,
+    {enum_value_name}_DELETED,
+    
+{",\n".join(enum_values_per_field)},
+    ;
+}}
+"""
+
+def generate_model_events_enum(table_name, columns, package_prefix):
+    class_name = make_class_name(table_name)
+    enum_value_name = singularize_word(table_name.split('.')[-1]).upper()
+    
+    enum_values_per_field = []
+    
+    for col_name, data_type in columns.items():
+        java_type = sql_to_java_type(data_type)
+        enum_values_per_field.append(f"    {enum_value_name}_{col_name.upper()}_CREATED")
+        enum_values_per_field.append(f"    {enum_value_name}_{col_name.upper()}_UPDATED")
+        enum_values_per_field.append(f"    {enum_value_name}_{col_name.upper()}_DELETED")
+    
+    return f"""\
+package {package_prefix}.domain.enums.models;
+
+public enum {class_name}ModelEvents {{
+    {enum_value_name}_CREATED,
+    {enum_value_name}_UPDATED,
+    {enum_value_name}_DELETED,
+    
+{",\n".join(enum_values_per_field)},
+    ;
+}}
+"""
+
+
+def generate_exception(table_name, package_prefix, app_package_prefix, exception_type):
+    class_name = make_class_name(table_name)
+    
+    return f"""\
+package {package_prefix}.exceptions;
+
+import {app_package_prefix}.exceptions.DomainException;
+import {app_package_prefix}.exceptions.DomainRuntimeException;
+
+public class {class_name}{exception_type} extends DomainRuntimeException {{
+    
+    public {class_name}{exception_type}(String message) {{
+        super(message);
+    }}
+    
+    public {class_name}{exception_type}(String message, Throwable cause) {{
+        super(message, cause);
+    }}
+    
+    public {class_name}{exception_type}(Throwable cause) {{
+        super(cause);
+    }}
+
+}}
+"""
+
+
+def generate_error_codes(table_name, app_package_prefix, package_prefix):
+    class_name = make_class_name(table_name)
+    
+    def increment_error_code():
+        global error_code_counter
+        error_code_counter += 1
+        return error_code_counter
+    
+    return f"""\
+package {package_prefix}.exceptions;
+
+import {app_package_prefix}.interfaces.ErrorCode;
+import lombok.Getter;
+
+public enum {class_name}ErroCodes implements ErrorCode {{
+    
+    NotFound({increment_error_code()}, "{rot13_codec(class_name)}", "{class_name} not found"),
+    CreateFailed({increment_error_code()}, "{rot13_codec(class_name)}", "{class_name} data could not be created"),
+    SearchFailed({increment_error_code()}, "{rot13_codec(class_name)}", "{class_name} data search failed"),
+    UpdateFailed({increment_error_code()}, "{rot13_codec(class_name)}", "{class_name} data could not be updated"),
+    PatchFailed({increment_error_code()}, "{rot13_codec(class_name)}", "{class_name} data could not be patched"),
+    DeleteFailed({increment_error_code()}, "{rot13_codec(class_name)}", "{class_name} data could not be deleted"),
+    Locked({increment_error_code()}, "{rot13_codec(class_name)}", "{class_name} data is locked"),
+    Corrupted({increment_error_code()}, "{rot13_codec(class_name)}", "{class_name} data is corrupted"),
+    InvalidData({increment_error_code()}, "{rot13_codec(class_name)}", "{class_name} data is invalid"),
+    InvalidState({increment_error_code()}, "{rot13_codec(class_name)}", "{class_name} data is in an invalid state"),
+    InvalidOperation({increment_error_code()}, "{rot13_codec(class_name)}", "{class_name} data operation is invalid"),
+    InvalidRequest({increment_error_code()}, "{rot13_codec(class_name)}", "{class_name} request is invalid"),
+    ProcessingFailed({increment_error_code()}, "{rot13_codec(class_name)}", "{class_name} data processing failed"),
+    UnexpectedError({increment_error_code()}, "{rot13_codec(class_name)}", "{class_name} - unexpected error occurred"),
+    ;
+    
+    @Getter
+    private int errorId;
+
+    @Getter
+    private String errorClass;
+    
+    @Getter
+    private String errorMessage;
+
+    {class_name}ErroCodes(int errorId, String errorClass, String errorMessage) {{
+        this.errorId = errorId;
+        this.errorClass = errorClass;
+        this.errorMessage = errorMessage;
+    }}
+
+}}
+"""
+  
+  
 
 def generate_repository(table_name, columns, package_prefix):
     class_name = make_class_name(table_name)
@@ -608,6 +776,42 @@ public class {class_name}Controller {{
 """
 
 
+def generate_main_service_controller_advice(service_name, package_prefix):
+    class_name = make_class_name(service_name, False)
+
+    return f"""\
+package {package_prefix}.controllers.advices;
+
+import org.springframework.web.bind.annotation.*;
+import java.io.IOException;
+import org.springframework.http.HttpStatus;
+import java.util.UUID;
+import {package_prefix}.domain.responses.ErrorCodeResponse;
+import {package_prefix}.exceptions.DomainException;
+import {package_prefix}.exceptions.DomainRuntimeException;
+
+
+
+
+@RestController
+@RequestMapping("/{service_name}")
+public class AppControllerAdvice {{
+
+    @ExceptionHandler(DomainException.class)
+    public ResponseEntity<ErrorCodeResponse> handle(DomainException ex) {{
+        return new ResponseEntity<>(new ErrorCodeResponse(ex.getErrorCode()), ex.getHttpStatus());
+    }}
+
+    @ExceptionHandler(DomainRuntimeException.class)
+    public ResponseEntity<ErrorCodeResponse> handle(DomainRuntimeException ex) {{
+        return new ResponseEntity<>(new ErrorCodeResponse(ex.getErrorCode()), ex.getHttpStatus());
+    }}
+
+}}
+"""
+
+
+
 def generate_datasource_config(service_name, package_prefix):
     class_name = make_class_name(service_name, False)
   
@@ -708,10 +912,35 @@ def generate_main_service_import_config(table_name, package_prefix):
       "import_stmts": import_stmts,
     }
     
+
+
+def generate_main_services_enum(service_names, app_package_prefix):
+    enum_values = []
     
-def snake_to_camel(snake_string):
-    components = snake_string.split('_')
-    return components[0] + ''.join(x.title() for x in components[1:])
+    for service_name in service_names:
+        enum_value_name = snake_to_camel(service_name).upper()
+        enum_values.append(f"    {enum_value_name}_SERVICE")
+    
+    return f"""\
+package {app_package_prefix}.domain.enums;
+
+public enum ServiceNames {{
+  
+{",\n".join(enum_values)},
+    ;
+    
+    public static ServiceNames fromString(String name) {{
+        for (ServiceNames service : ServiceNames.values()) {{
+            if (service.name().equalsIgnoreCase(name)) {{
+                return service;
+            }}
+        }}
+        return null;
+    }}
+    
+}}
+"""
+    
   
 def generate_entity_class(table_name, columns, package_prefix):
     class_name = make_class_name(table_name)
@@ -775,11 +1004,10 @@ public class {class_name}Entity {{
 """
     return entity_code
 
-def parse_sql_file(sql_config):
+def parse_sql_file(sql_config, app_package_prefix):
     service_name = sql_config['service']
     sql_file_path = sql_config['sql_path']
     datasources_package_prefix = f"com.modernapps.maverick.gateway_api.datasources.{sql_config['service']}"
-    app_package_prefix = f"com.modernapps.maverick.gateway_api"
   
   
     with open(sql_file_path, 'r') as sql_file:
@@ -796,7 +1024,13 @@ def parse_sql_file(sql_config):
     service_implementations = {}
     controllers = {}
     search_params = {}
+    model_event_enums = {}
     import_configs: list = []
+    
+    not_found_exceptions = {}
+    invalid_data_exceptions = {}
+    
+    error_codes = {}
     
     for table_name, columns_def in table_definitions:
         columns = {}
@@ -830,19 +1064,29 @@ def parse_sql_file(sql_config):
         controllers[table_name] = generate_service_controller(table_name, service_name, columns, app_package_prefix)
         typescript_types_classes[table_name] = generate_typescript_types_classes(table_name, columns)
         search_params[table_name] = generate_search_params_class(table_name, columns, datasources_package_prefix)
+        model_event_enums[table_name] = generate_model_events_enum(table_name, columns, datasources_package_prefix)
         
         import_configs_by_table = generate_main_service_import_config(table_name, datasources_package_prefix)
         import_configs.append(import_configs_by_table)
+        
+        not_found_exceptions[table_name] = generate_exception(table_name, datasources_package_prefix, app_package_prefix, 'NotFoundException')
+        invalid_data_exceptions[table_name] = generate_exception(table_name, datasources_package_prefix, app_package_prefix, 'InvalidDataException')
+        error_codes[table_name] = generate_error_codes(table_name, app_package_prefix, datasources_package_prefix)
         
     main_datasource_config = generate_datasource_config(service_name, app_package_prefix)
     main_service_interface = generate_main_service_interface(service_name, app_package_prefix, import_configs, datasources_package_prefix)
     main_service_implementation = generate_main_service_interface_implementation(service_name, app_package_prefix, import_configs, datasources_package_prefix)
     main_controller = generate_main_service_controller(service_name, app_package_prefix)
+    main_controller_advice = generate_main_service_controller_advice(service_name, app_package_prefix)
+    model_names_enum = generate_model_names_enum(service_name, [ table_name for table_name, columns_def in table_definitions ], app_package_prefix)
+    
+    # model_names_enum 
 
     return {
       'entities': entities,
       'dto': dto,
       'search_params': search_params,
+      'model_event_enums': model_event_enums,
       'typescript_types_classes': typescript_types_classes,
       'repositories': repositories,
       'controllers': controllers,
@@ -852,6 +1096,11 @@ def parse_sql_file(sql_config):
       'main_service_interface': main_service_interface,
       'main_service_implementation': main_service_implementation,
       'main_controller': main_controller,
+      'main_controller_advice': main_controller_advice,
+      'model_names_enum': model_names_enum,
+      'not_found_exceptions': not_found_exceptions,
+      'invalid_data_exceptions': invalid_data_exceptions,
+      'error_codes': error_codes,
     }
 
 
@@ -935,8 +1184,490 @@ public record ResultsResponse<T>(
 ) {{ }}
 """
     write_to_file(contents = results_response_class, path_full = f'src/domain/responses/ResultsResponse.java')
+    
+    
+    error_code_response_class = f"""\
+package {package_prefix}.domain.responses;
+
+import {package_prefix}.interfaces.ErrorCode;
+
+public record ErrorCodeResponse(ErrorCode errorCode) {{ }}
+"""
+    write_to_file(contents = error_code_response_class, path_full = f'src/domain/responses/ErrorCodeResponse.java')
+    
+    
+    coerce_utils = f"""\
+package {package_prefix}.utils;
 
 
+import java.util.function.Consumer;
+import java.util.function.Function;
+
+public class CoerceUtils {{
+
+    public static <T,R> R returnOnNotNull(T obj, Function<T, R> fn) {{
+        return obj == null ? null : fn.apply(obj);
+    }}
+    
+    public static <T,R> void runOnNotNull(T obj, Consumer<T> fn) {{
+        if (obj != null) {{
+            fn.accept(obj);
+        }}
+    }}
+
+    public static <T> T coalesceFalsy(T obj, T defaultValue) {{
+        return obj != null ? obj : defaultValue;
+    }}
+
+}}
+"""
+    write_to_file(contents = coerce_utils, path_full = f'src/utils/CoerceUtils.java')
+    
+    
+    common_utils = f"""\
+package {package_prefix}.utils;
+
+package com.modernapps.maverick.gateway_api.utils;
+
+import lombok.NonNull;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.time.Instant;
+import java.util.UUID;
+import java.util.function.Predicate;
+
+public class CommonUtils {{
+
+    public static <T extends Enum<T>> T enumFromName(Class<T> enumClass, String enumName) {{
+        if (enumName == null) {{
+            return null;
+        }}
+        for (T enumValue : enumClass.getEnumConstants()) {{
+            if (enumName.equals(enumValue.name())) {{
+                return enumValue;
+            }}
+        }}
+        return null;
+    }}
+
+    public static <T extends Enum<T>> T enumByPredicate(Class<T> enumClass, @NonNull Predicate<T> predicate) {{
+        for (T enumValue : enumClass.getEnumConstants()) {{
+            if (predicate.test(enumValue)) {{
+                return enumValue;
+            }}
+        }}
+        return null;
+    }}
+
+    public static String makeUniqueFileNameFromFile(MultipartFile file) {{
+        String[] fileNameSplit = file.getOriginalFilename().split("\\.");
+        String extension = fileNameSplit[fileNameSplit.length - 1];
+        return String.format("%s.%s.%s", UUID.randomUUID(), Instant.now().toEpochMilli(), extension);
+    }}
+
+}}
+"""
+    write_to_file(contents = common_utils, path_full = f'src/utils/CommonUtils.java')
+    
+    
+    password_utils = f"""\
+package {package_prefix}.utils;
+
+
+import org.mindrot.jbcrypt.BCrypt;
+
+public class PasswordUtils {{
+
+    // Hash a password using bcrypt
+    public static String hashPassword(String password) {{
+        // The log rounds are 12 by default in bcrypt, but you can specify your own (e.g. 10, 12, 14).
+        return BCrypt.hashpw(password, BCrypt.gensalt(12));
+    }}
+
+    // Check if the plain text password matches the hashed password
+    public static boolean checkPassword(String password, String hashedPassword) {{
+        return BCrypt.checkpw(password, hashedPassword);
+    }}
+
+}}
+"""
+    write_to_file(contents = password_utils, path_full = f'src/utils/PasswordUtils.java')
+    
+    ### JWT Configs
+    
+    jwt_auth_aspect = f"""\
+package {package_prefix}.configs.jwt;
+    
+
+import {package_prefix}.configs.jwt.JwtAuthorized;
+import org.aspectj.lang.JoinPoint;
+import org.aspectj.lang.annotation.Aspect;
+import org.aspectj.lang.annotation.Before;
+import org.aspectj.lang.reflect.MethodSignature;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
+import java.lang.reflect.Method;
+
+@Aspect
+@Component
+public class JwtAuthorizedAspect {{
+
+    // Intercept request/controller methods annotated with @JwtAuthorized
+    @Before("@annotation({package_prefix}.configs.jwt.JwtAuthorized)")
+    public void extractAuthenticationToken(JoinPoint joinPoint) {{
+        // Retrieve the authentication token from the SecurityContextHolder
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        boolean isAuthorized = authentication != null && authentication.isAuthenticated();
+
+        // Get the method being called
+        Method method = ((MethodSignature) joinPoint.getSignature()).getMethod();
+        // Check if the method has the CustomAuth annotation
+        JwtAuthorized jwtAuthorized = method.getAnnotation(JwtAuthorized.class);
+
+        boolean shouldThrowError = jwtAuthorized != null && (!isAuthorized && !jwtAuthorized.suppressError());
+        if (shouldThrowError) {{
+            throw new RuntimeException("Not JWT Authorized");
+        }}
+    }}
+
+}}
+"""
+    write_to_file(contents = jwt_auth_aspect, path_full = f'src/configs/jwt/JwtAuthorizedAspect.java')
+
+    
+    jwt_auth_request_filter = f"""\
+package {package_prefix}.configs.jwt;
+    
+
+import {package_prefix}.configs.jwt.JwtUtilsConfig;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.UUID;
+
+
+public class JwtAuthRequestFilter extends OncePerRequestFilter {{
+
+    private JwtUtilsConfig jwtUtilsConfig;
+
+    public JwtAuthRequestFilter(JwtUtilsConfig jwtUtilsConfig) {{
+        this.jwtUtilsConfig = jwtUtilsConfig;
+    }}
+
+    @Override
+    protected void doFilterInternal(
+        HttpServletRequest request,
+        HttpServletResponse response,
+        FilterChain filterChain
+    ) throws ServletException, IOException {{
+        // Get JWT token from the request header
+        String token = request.getHeader("Authorization");
+
+        // Check if token is valid
+        boolean isBearerToken = token != null && token.startsWith("Bearer ");
+        if (isBearerToken) {{
+            token = token.substring(7); // Remove "Bearer " prefix
+            try {{
+                String userId = this.jwtUtilsConfig.verifyToken(token);
+                SimpleGrantedAuthority authority = new SimpleGrantedAuthority("AUTH_USER");
+                UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(userId, null, List.of(authority)); // You could add authorities here
+                SecurityContextHolder.getContext().setAuthentication(authenticationToken);
+
+                request.setAttribute("JWT", token);
+                request.setAttribute("AUTH_USER_ID", UUID.fromString(userId));
+
+                System.out.println("[JwtAuthRequestFilter] request jwt authorized");
+            }}
+            catch (Exception ex) {{
+                // not jwt authorized
+                System.out.println("[JwtAuthRequestFilter] request jwt authorization failed");
+                System.out.println(ex.getMessage());
+                ex.printStackTrace();
+            }}
+        }}
+
+        filterChain.doFilter(request, response);
+    }}
+}}
+"""
+    write_to_file(contents = jwt_auth_request_filter, path_full = f'src/configs/jwt/JwtAuthRequestFilter.java')
+    
+    
+    jwt_auth_method_annotation = f"""\
+package {package_prefix}.configs.jwt;
+    
+
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
+@Target(ElementType.METHOD)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface JwtAuthorized {{
+
+    boolean suppressError() default false;
+
+}}
+"""
+    write_to_file(contents = jwt_auth_method_annotation, path_full = f'src/configs/jwt/JwtAuthorized.java')
+    
+    
+    jwt_utils_config = f"""\
+package {package_prefix}.configs.jwt;
+    
+
+
+import io.jsonwebtoken.*;
+
+import java.nio.charset.StandardCharsets;
+import java.security.Key;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+
+import io.jsonwebtoken.security.Keys;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+import javax.crypto.Mac;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
+
+@Component
+public class JwtUtilsConfig {{
+
+    // Secret key for signing the JWT
+    private final String SECRET_KEY;  // Keep this safe!
+
+    // Expiration time in milliseconds (e.g., 1 hour)
+    private final long EXPIRATION_TIME = (1000 * 60 * 60 * 24 * 7);  // 1 week
+
+    public JwtUtilsConfig(@Value("${{auth.jwt.secret}}") String authJwtSecret) {{
+        this.SECRET_KEY = authJwtSecret;
+    }}
+
+    // Create a JWT token
+    public String createToken(String userId) {{
+        return Jwts.builder()
+            .claims(Map.ofEntries(
+                Map.entry("userId", userId)
+            ))
+            .subject(userId)
+            .issuedAt(new Date())
+            .expiration(new Date(System.currentTimeMillis() + this.EXPIRATION_TIME))
+            .signWith(createSigningKey())
+            .compact();  // Return the JWT string
+    }}
+
+    public String verifyToken(String token) {{
+        try {{
+            Jws<Claims> claimsJws = Jwts.parser()
+                .verifyWith(this.createSigningKey())
+                .build()
+                .parseSignedClaims(token);
+
+            return claimsJws.getPayload().getSubject();
+        }} catch (JwtException | IllegalArgumentException e) {{
+            // Handle token errors (expired, invalid, etc.)
+            System.out.println("Token verification failed: " + e.getMessage());
+            throw e;
+        }}
+    }}
+
+    // Check if a token is expired
+    public boolean isTokenExpired(String token) {{
+        try {{
+            Jws<Claims> claimsJws = Jwts.parser()
+                .verifyWith(this.createSigningKey())
+                .build()
+                .parseSignedClaims(token);
+
+            Date expirationDate = claimsJws.getPayload().getExpiration();
+            return expirationDate.before(new Date());
+        }} catch (JwtException | IllegalArgumentException e) {{
+            return true;  // If token is invalid or expired
+        }}
+    }}
+
+    // Helper method to create the signing key
+    private SecretKey createSigningKey() {{
+        SecretKey key = Keys.hmacShaKeyFor(this.SECRET_KEY.getBytes(StandardCharsets.UTF_8));
+        return key;
+    }}
+}}
+"""
+    write_to_file(contents = jwt_utils_config, path_full = f'src/configs/jwt/JwtUtilsConfig.java')
+    
+    
+    security_config = f"""\
+package {package_prefix}.configs;
+    
+
+import {package_prefix}.configs.jwt.JwtAuthRequestFilter;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+
+
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {{
+
+    private JwtUtilsConfig jwtUtilsConfig;
+
+    public SecurityConfig(JwtUtilsConfig jwtUtilsConfig) {{
+        this.jwtUtilsConfig = jwtUtilsConfig;
+    }}
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {{
+        http
+            .authorizeHttpRequests(authorize -> authorize
+                .requestMatchers("/").permitAll()
+                .anyRequest().permitAll()
+            )
+            .addFilterBefore(new JwtAuthRequestFilter(this.jwtUtilsConfig), UsernamePasswordAuthenticationFilter.class)
+            .csrf(AbstractHttpConfigurer::disable)
+            .httpBasic(AbstractHttpConfigurer::disable)
+            .formLogin(AbstractHttpConfigurer::disable);
+        return http.build();
+    }}
+}}
+"""
+    write_to_file(contents = security_config, path_full = f'src/configs/SecurityConfig.java')
+    
+    
+    domain_exception = f"""\
+package {package_prefix}.exceptions;
+
+import {package_prefix}.interfaces.ErrorCode;
+import org.springframework.http.HttpStatus;
+import lombok.Getter;
+
+public class DomainException extends Exception {{
+  
+    @Getter
+    private HttpStatus httpStatus;
+    
+    @Getter
+    private ErrorCode errorCode;
+    
+    public DomainException(String message) {{
+        super(message);
+    }}
+    
+    public DomainException(String message, Throwable cause) {{
+        super(message, cause);
+    }}
+    
+    public DomainException(Throwable cause) {{
+        super(cause);
+    }}
+    
+    public DomainException(String message, HttpStatus httpStatus, ErrorCode errorCode) {{
+        super(message);
+        this.httpStatus = httpStatus;
+        this.errorCode = errorCode;
+    }}
+    
+    public DomainException(String message, Throwable cause, HttpStatus httpStatus, ErrorCode errorCode) {{
+        super(message, cause);
+        this.httpStatus = httpStatus;
+        this.errorCode = errorCode;
+    }}
+    
+    public DomainException(Throwable cause, HttpStatus httpStatus, ErrorCode errorCode) {{
+        super(cause);
+        this.httpStatus = httpStatus;
+        this.errorCode = errorCode;
+    }}
+
+}}
+"""
+    write_to_file(contents = domain_exception, path_full = f'src/exceptions/DomainException.java')
+    
+    
+    domain_runtime_exception = f"""\
+package {package_prefix}.exceptions;
+
+import org.springframework.http.HttpStatus;
+import lombok.Getter;
+
+public class DomainRuntimeException extends RuntimeException {{
+  
+    @Getter
+    private HttpStatus httpStatus;
+    
+    @Getter
+    private ErrorCode errorCode;
+    
+    public DomainRuntimeException(String message) {{
+        super(message);
+    }}
+    
+    public DomainRuntimeException(String message, Throwable cause) {{
+        super(message, cause);
+    }}
+    
+    public DomainRuntimeException(Throwable cause) {{
+        super(cause);
+    }}
+    
+    public DomainRuntimeException(String message, HttpStatus httpStatus, ErrorCode errorCode) {{
+        super(message);
+        this.httpStatus = httpStatus;
+        this.errorCode = errorCode;
+    }}
+    
+    public DomainRuntimeException(String message, Throwable cause, HttpStatus httpStatus, ErrorCode errorCode) {{
+        super(message, cause);
+        this.httpStatus = httpStatus;
+        this.errorCode = errorCode;
+    }}
+    
+    public DomainRuntimeException(Throwable cause, HttpStatus httpStatus, ErrorCode errorCode) {{
+        super(cause);
+        this.httpStatus = httpStatus;
+        this.errorCode = errorCode;
+    }}
+
+}}
+"""
+    write_to_file(contents = domain_runtime_exception, path_full = f'src/exceptions/DomainRuntimeException.java')
+    
+
+    error_codes_interface = f"""\
+package {package_prefix}.interfaces;
+
+public interface ErrorCode {{
+  
+  int errorCode;
+  String errorClass;
+  String errorMessage;
+
+}}
+"""
+    write_to_file(contents = error_codes_interface, path_full = f'src/interfaces/ErrorCode.java')
+    
+    
+    
+    
+# END OF HELPER CLASSES
 
 if __name__ == "__main__":
     """
@@ -956,9 +1687,12 @@ if __name__ == "__main__":
         deleted_at_utc TIMESTAMP DEFAULT NULL
     );
     """
+    
+    app_package_prefix = f"com.modernapps.maverick.gateway_api"
   
     sql_configs = [
       # format: { "service": "service_name", "sql_path": "full/path/to/sql_file.sql" }
+      
     ]
     
     if os.path.exists("src"):
@@ -966,11 +1700,16 @@ if __name__ == "__main__":
       
       
     create_helper_classes("com.modernapps.maverick.gateway_api")
+    
+    main_services_enum = generate_main_services_enum([ c['service'] for c in sql_configs ], app_package_prefix)
+    write_to_file(contents = main_services_enum, path_full = f'src/enums/ServiceNames.java')
       
     for sql_config in sql_configs:
       # print("processing: ", sql_configs)
       
-      results = parse_sql_file(sql_config)
+      results = parse_sql_file(sql_config, app_package_prefix)
+      
+      use_service_name = make_class_name(sql_config['service'], False)
       
       write_items_to_files(items = results['entities'], classNameSuffix = "Entity", output_dir = f'src/datasources/{sql_config['service']}/entities')
       write_items_to_files(items = results['dto'], classNameSuffix = "Dto", output_dir = f'src/datasources/{sql_config['service']}/dto')
@@ -980,11 +1719,18 @@ if __name__ == "__main__":
       write_items_to_files(items = results['service_interfaces'], classNameSuffix = "Service", output_dir = f'src/datasources/{sql_config['service']}/services/interfaces')
       write_items_to_files(items = results['service_implementations'], classNameSuffix = "ServiceImpl", output_dir = f'src/datasources/{sql_config['service']}/services/implementations')
       write_items_to_files(items = results['search_params'], classNameSuffix = "SearchParams", output_dir = f'src/datasources/{sql_config['service']}/dto/searches')
+      write_items_to_files(items = results['model_event_enums'], classNameSuffix = "ModelEvents", output_dir = f'src/datasources/{sql_config['service']}/enums/models')
+      write_items_to_files(items = results['not_found_exceptions'], classNameSuffix = "NotFoundException", output_dir = f'src/datasources/{sql_config['service']}/exceptions')
+      write_items_to_files(items = results['invalid_data_exceptions'], classNameSuffix = "InvalidDataException", output_dir = f'src/datasources/{sql_config['service']}/exceptions')
+      write_items_to_files(items = results['error_codes'], classNameSuffix = "ErrorCodes", output_dir = f'src/datasources/{sql_config['service']}/enums/errors')
       
-      write_to_file(contents = results['main_datasource_config'], path_full = f'src/configs/DatasourceJpaConfig{make_class_name(sql_config['service'], False)}Db.java')
-      write_to_file(contents = results['main_service_interface'], path_full = f'src/services/interfaces/{make_class_name(sql_config['service'], False)}Service.java')
-      write_to_file(contents = results['main_service_implementation'], path_full = f'src/services/implementations/{make_class_name(sql_config['service'], False)}ServiceImpl.java')
-      write_to_file(contents = results['main_controller'], path_full = f'src/controllers/{make_class_name(sql_config['service'], False)}Controller.java')
+      write_to_file(contents = results['main_datasource_config'], path_full = f'src/configs/DatasourceJpaConfig{use_service_name}Db.java')
+      write_to_file(contents = results['main_service_interface'], path_full = f'src/services/interfaces/{use_service_name}Service.java')
+      write_to_file(contents = results['main_service_implementation'], path_full = f'src/services/implementations/{use_service_name}ServiceImpl.java')
+      write_to_file(contents = results['main_controller'], path_full = f'src/controllers/{use_service_name}Controller.java')
+      write_to_file(contents = results['model_names_enum'], path_full = f'src/datasources/{sql_config['service']}/enums/{use_service_name}ModelNames.java')
+      write_to_file(contents = results['main_controller_advice'], path_full = f'src/controllers/advices/AppControllerAdvice.java')
+      
     # END for
       
     print("Resource classes generated successfully")
