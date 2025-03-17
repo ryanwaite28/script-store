@@ -73,6 +73,25 @@ def make_class_name(table_name, singularize = True):
   class_name = ''.join(word.capitalize() for word in table_name_split)
   return snake_to_camel(class_name)
 
+
+def java_cast_to_type(sql_type, value):
+    if 'UUID' in sql_type:
+        return f"UUID.fromString({value})"
+    if 'INT' in sql_type:
+        return f'Integer.valueOf({value})'
+    if 'BIGINT' in sql_type:
+        return f'BigInteger.valueOf({value})'
+    if 'BOOLEAN' in sql_type:
+        return f'Boolean.valueOf({value})'
+    elif ('VARCHAR' in sql_type or 'TEXT' in sql_type or 'JSON' in sql_type or 'JSOB' in sql_type):
+        return f'String.valueOf({value})'
+    elif 'DATE' in sql_type or 'TIMESTAMP' in sql_type:
+        return f'LocalDateTime.parse({value})'
+    elif 'DOUBLE' in sql_type or 'DECIMAL' in sql_type:
+        return f'Double.valueOf({value})'
+    else:
+        return value
+
 def sql_to_java_type(sql_type):
     if 'UUID' in sql_type:
         return 'UUID'
@@ -127,10 +146,12 @@ import {app_package_prefix}.domain.responses.PaginationResponse;
 import {package_prefix}.dto.{class_name}Dto;
 import {package_prefix}.dto.searches.{class_name}SearchParams;
 import java.util.UUID;
-
+import java.util.Map;
 
 public interface {class_name}Service {{
   
+    PaginationResponse<{class_name}Dto> search{class_name}(Map<String, String> queryParams);
+    
     PaginationResponse<{class_name}Dto> search{class_name}({class_name}SearchParams params);
     
     {class_name}Dto getById(UUID id);
@@ -157,6 +178,12 @@ def generate_service_interface_implementation(table_name, columns, app_package_p
     
     search_predicates = []
     
+    
+    # cb.equal(root.get(\"{snake_to_camel(col_name)}\"), params.{snake_to_camel(col_name)}())
+    
+    # lambda to pick cb.equal, cb.like, etc based on data type
+    # def get_predicate_method(data_type):
+    
     for col_name, data_type in columns.items():
         java_type = sql_to_java_type(data_type)
         if col_name == 'id':
@@ -166,14 +193,16 @@ def generate_service_interface_implementation(table_name, columns, app_package_p
             entity.set{snake_to_camel(col_name.capitalize())}({ "UUID.fromString(" if java_type == "UUID" else "" }dto.get{snake_to_camel(col_name.capitalize())}(){ ")" if java_type == "UUID" else "" });
         }}""")
         
+        update_statements.append(f"""entity.set{snake_to_camel(col_name.capitalize())}({ f"dto.get{snake_to_camel(col_name.capitalize())}() == null ? null : " if java_type == "UUID" else "" }{ "UUID.fromString(" if java_type == "UUID" else "" }dto.get{snake_to_camel(col_name.capitalize())}(){ ")" if java_type == "UUID" else "" });""")
+        
         search_predicates.append(f"if (params.{snake_to_camel(col_name)}() != null) {{\n                predicates.add(cb.equal(root.get(\"{snake_to_camel(col_name)}\"), params.{snake_to_camel(col_name)}()));\n            }}")
         
-        update_statements.append(f"""entity.set{snake_to_camel(col_name.capitalize())}({ f"dto.get{snake_to_camel(col_name.capitalize())}() == null ? null : " if java_type == "UUID" else "" }{ "UUID.fromString(" if java_type == "UUID" else "" }dto.get{snake_to_camel(col_name.capitalize())}(){ ")" if java_type == "UUID" else "" });""")
         
     
     return f"""\
 package {package_prefix}.services.implementations;
 
+import {app_package_prefix}.utils.RequestParamsUtils;
 import {app_package_prefix}.domain.responses.PaginationResponse;
 import {package_prefix}.dto.searches.{class_name}SearchParams;
 import {package_prefix}.services.interfaces.{class_name}Service;
@@ -207,6 +236,41 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
     }}
     
     
+    
+    
+    @Override
+    public PaginationResponse<{class_name}Dto> search{class_name}(Map<String, String> queryParams) {{
+        if (queryParams == null) {{
+            throw new IllegalArgumentException("Search params cannot be null");
+        }}
+
+        int queryOffset = queryParams.containsKey("offset") ? Integer.parseInt(queryParams.get("offset")) : 0;
+        int queryLimit = queryParams.containsKey("limit") ? Integer.parseInt(queryParams.get("limit")) : 0;
+
+        Specification<{class_name}Entity> querySpec = RequestParamsUtils.convertParamsToSearchPredicates(queryParams, {class_name}Entity.class);
+
+        Pageable pageable = PageRequest.of(queryOffset, queryLimit);
+
+        Page<{class_name}Entity> pageResults = this.{var_name}Repository.findAll(querySpec, pageable);
+
+        List<{class_name}Dto> resultsData = pageResults.getContent().stream().map({class_name}Dto::fromEntity).toList();
+        Integer offset = pageResults.getNumber();
+        Integer limit = pageResults.getSize();
+        Integer page = pageResults.getNumber();
+        Integer pages = pageResults.getTotalPages();
+        Integer resultsCount = resultsData.size();
+        Long tableCount = pageResults.getTotalElements();
+
+        return new PaginationResponse<>(
+            resultsData,
+            resultsCount,
+            tableCount,
+            offset,
+            limit,
+            page,
+            pages
+        );
+    }}
     
     @Override
     public PaginationResponse<{class_name}Dto> search{class_name}({class_name}SearchParams params) {{
@@ -316,7 +380,7 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
     }}
     
     
-    private void validateCreate{class_name}({class_name}Dto dto) {{
+    private void validateCreate{class_name}Dto({class_name}Dto dto) {{
         if (dto == null) {{
             throw new IllegalArgumentException("DTO cannot be null");
         }}
@@ -326,7 +390,7 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
         }}
     }}
     
-    private void validateUpdate{class_name}({class_name}Dto dto) {{
+    private void validateUpdate{class_name}Dto({class_name}Dto dto) {{
         if (dto == null) {{
             throw new IllegalArgumentException("DTO cannot be null");
         }}
@@ -338,6 +402,8 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
   
 }}
 """
+
+
 
 
 def generate_main_service_interface(service_name, package_prefix, import_configs, datasources_package_prefix):
@@ -476,26 +542,97 @@ public class {class_name}Dto {{
 """
 
 
+# def generate_fields_types_map(table_name, columns, package_prefix):
+#     class_name = make_class_name(table_name)
+    
+#     fields = []
+#     getters = []
+    
+#     for col_name, data_type in columns.items():
+#         java_type = sql_to_java_type(data_type)
+#         fields.append(f"    private {"String" if (java_type == 'UUID') else f"String" if ("JSON" in data_type) else java_type} {snake_to_camel(col_name)};")
+#         getters.append(f"            entity.get{snake_to_camel(col_name.capitalize())}(){".toString()" if (java_type == 'UUID') else ""}")
+    
+#     return f"""\
+# package {package_prefix}.dto;
+
+# import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+# import com.fasterxml.jackson.annotation.JsonInclude;
+# import {package_prefix}.entities.{class_name}Entity;
+# import lombok.Data;
+# import lombok.Builder;
+# import lombok.AllArgsConstructor;
+# import lombok.NoArgsConstructor;
+# import java.time.LocalDateTime;
+# import java.util.UUID;
+
+# @Data
+# @Builder
+# @AllArgsConstructor
+# @NoArgsConstructor
+# @JsonIgnoreProperties(ignoreUnknown = true)
+# public class {class_name}FieldsType {{
+
+# {"\n".join(fields)}
+
+#     public static {class_name}Dto fromEntity({class_name}Entity entity) {{
+#         if (entity == null) {{
+#             return null;
+#         }}
+#         return new {class_name}Dto(
+# {',\n'.join(getters)}
+#         );
+#     }}
+    
+#     public static {class_name}Entity toEntity({class_name}Dto dto) {{
+#         if (dto == null) {{
+#             return null;
+#         }}
+#         return {class_name}Entity.builder()
+# {'\n'.join([f"            .{snake_to_camel(col_name)}({ "UUID.fromString(" if sql_to_java_type(data_type) == "UUID" else "" }dto.get{snake_to_camel(col_name.capitalize())}(){ ")" if sql_to_java_type(data_type) == "UUID" else "" })" for col_name, data_type in columns.items()])}
+#             .build();
+#     }}
+
+# }}
+# """
+
+
 def generate_search_params_class(table_name, columns, package_prefix):
     class_name = make_class_name(table_name)
     
     fields = []
+    constructor_args = []
+    
+    # queryParams.getOrDefault(\"{snake_to_camel(col_name)}\", null)
     
     for col_name, data_type in columns.items():
         java_type = sql_to_java_type(data_type)
-        fields.append(f"    {"String" if (java_type == "UUID") else java_type} {snake_to_camel(col_name)}")
+        fields.append(f"    {java_type} {snake_to_camel(col_name)}")
+        # build constructor args from query params map
+        constructor_args.append(f"      {f"!queryParams.containsKey(\"{snake_to_camel(col_name)}\") || queryParams.get(\"{snake_to_camel(col_name)}\") == null"} ? null : {java_cast_to_type(data_type, f"queryParams.get(\"{snake_to_camel(col_name)}\")")}")
     
     return f"""\
 package {package_prefix}.dto.searches;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
+import java.util.Map;
 
 public record {class_name}SearchParams(
 {",\n".join([ f"{f}" for f in fields])},
     Integer offset,
     Integer limit
-) {{}}
+) {{
+  
+    public {class_name}SearchParams(Map<String, String> queryParams) {{
+        this(
+{',\n'.join([ f"      {f}" for f in constructor_args])},
+            Integer.parseInt(queryParams.getOrDefault("offset", "0")),
+            Integer.parseInt(queryParams.getOrDefault("limit", "10"))
+        );
+    }}
+  
+}}
 """
 
 
@@ -507,7 +644,7 @@ def generate_model_names_enum(service_name, table_names, app_package_prefix):
         enum_values.append(f"    {singularize_word(table_name.split('.')[1]).upper()}")
     
     return f"""\
-package {app_package_prefix}.domain.enums;
+package {app_package_prefix}.enums;
 
 public enum {use_service_name}ModelNames {{
 {",\n".join(enum_values)},
@@ -538,7 +675,7 @@ def generate_model_events_enum(table_name, columns, package_prefix):
         enum_values_per_field.append(f"    {enum_value_name}_{col_name.upper()}_DELETED")
     
     return f"""\
-package {package_prefix}.domain.enums.models;
+package {package_prefix}.enums.models;
 
 public enum {class_name}ModelEvents {{
     {enum_value_name}_CREATED,
@@ -550,30 +687,7 @@ public enum {class_name}ModelEvents {{
 }}
 """
 
-def generate_model_events_enum(table_name, columns, package_prefix):
-    class_name = make_class_name(table_name)
-    enum_value_name = singularize_word(table_name.split('.')[-1]).upper()
-    
-    enum_values_per_field = []
-    
-    for col_name, data_type in columns.items():
-        java_type = sql_to_java_type(data_type)
-        enum_values_per_field.append(f"    {enum_value_name}_{col_name.upper()}_CREATED")
-        enum_values_per_field.append(f"    {enum_value_name}_{col_name.upper()}_UPDATED")
-        enum_values_per_field.append(f"    {enum_value_name}_{col_name.upper()}_DELETED")
-    
-    return f"""\
-package {package_prefix}.domain.enums.models;
 
-public enum {class_name}ModelEvents {{
-    {enum_value_name}_CREATED,
-    {enum_value_name}_UPDATED,
-    {enum_value_name}_DELETED,
-    
-{",\n".join(enum_values_per_field)},
-    ;
-}}
-"""
 
 
 def generate_exception(table_name, package_prefix, app_package_prefix, exception_type):
@@ -689,6 +803,23 @@ def generate_service_controller(table_name, service_name, columns, app_package_p
         service_arguments.append(f"{field_var_name}")
     
 
+### old way
+# @GetMapping("/search")
+#     public PaginationResponse<{class_name}Dto> searchInterviewAuthorities(
+# {",\n".join([ f"        {f}" for f in request_params])},
+
+#         @RequestParam(value = "offset", required = false) Integer offset,
+#         @RequestParam(value = "limit", required = false) Integer limit
+#     ) {{
+#         return this.{var_name}Service.search{class_name}(new {class_name}SearchParams(
+# {",\n".join([ f"            {f}" for f in service_arguments])},
+            
+#             offset != null ? offset : 0,
+#             limit != null ? limit : 10
+#         ));
+#     }}
+
+
     return f"""\
 package {app_package_prefix}.datasources.{service_name}.controllers;
 
@@ -701,6 +832,7 @@ import org.springframework.web.multipart.MultipartFile;
 import {app_package_prefix}.domain.responses.PaginationResponse;
 import java.io.IOException;
 import java.util.UUID;
+import java.util.Map;
 import java.time.LocalDateTime;
 import {app_package_prefix}.domain.responses.DataResponse;
 
@@ -721,18 +853,8 @@ public class {class_name}Controller {{
     
     
     @GetMapping("/search")
-    public PaginationResponse<{class_name}Dto> searchInterviewAuthorities(
-{",\n".join([ f"        {f}" for f in request_params])},
-
-        @RequestParam(value = "offset", required = false) Integer offset,
-        @RequestParam(value = "limit", required = false) Integer limit
-    ) {{
-        return this.{var_name}Service.search{class_name}(new {class_name}SearchParams(
-{",\n".join([ f"            {f}" for f in service_arguments])},
-            
-            offset != null ? offset : 0,
-            limit != null ? limit : 10
-        ));
+    public PaginationResponse<{class_name}Dto> search{class_name}(@RequestParam() Map<String, String> queryParams) {{
+        return this.{var_name}Service.search{class_name}(queryParams);
     }}
     
     @GetMapping(value = "/{{id}}")
@@ -882,6 +1004,7 @@ import java.util.Map;
 import java.util.Objects;
 
 @Configuration
+@ConditionalOnProperty(name = "", havingValue = "true", matchIfMissing = true)
 @EnableTransactionManagement
 @EnableJpaRepositories(
     basePackages = "{package_prefix}.datasources.{service_name}",
@@ -965,7 +1088,7 @@ def generate_main_services_enum(service_names, app_package_prefix):
         enum_values.append(f"    {enum_value_name}_SERVICE")
     
     return f"""\
-package {app_package_prefix}.domain.enums;
+package {app_package_prefix}.enums;
 
 public enum ServiceNames {{
   
@@ -1050,7 +1173,7 @@ public class {class_name}Entity {{
 def parse_sql_file(sql_config, app_package_prefix):
     service_name = sql_config['service']
     sql_file_path = sql_config['sql_path']
-    datasources_package_prefix = f"<enter_package_name>.datasources.{sql_config['service']}"
+    datasources_package_prefix = f"<enter_app_package>.datasources.{sql_config['service']}"
   
   
     with open(sql_file_path, 'r') as sql_file:
@@ -1705,10 +1828,257 @@ public interface ErrorCode {{
 """
     write_to_file(contents = error_codes_interface, path_full = f'src/interfaces/ErrorCode.java')
     
+    request_params_utils = f"""\
+package {package_prefix}.utils;
+
+import {package_prefix}.annotations.IgnoreOnSearch;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Root;
+import org.springframework.data.jpa.domain.Specification;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.time.LocalDateTime;
+import java.util.*;
+
+import jakarta.persistence.criteria.Predicate;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+
+/*
+
+    Examples:
+    ===
+
+    /search?query=or<and<query<id|eq|4799afa3-bd39-415d-a024-65d8afa7acc6>,query<createdAtUtc|lte|2025-03-01>>,and<query<bio|ilike|helloworld>,query<headline|like|great>>,and<query<city|ilike|plano>>,and<query<state|ilike|texas>>>
+
+    /search?id=eq|{{id}}
+    /search?createdAtUtc=lte|{{createdAtUtc}}
+    /search?bio=ilike|{{bio}}&headline=ilike|{{value}}&_or=true
+
+*/
+
+public class RequestParamsUtils {{
+
+    @FunctionalInterface
+    private interface FieldOpFn <T> {{
+        Predicate fn(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder cb, String field, String op, Object value);
+    }}
+
+    public static final Map<Class<?>, Set<String>> ACCEPTED_OPS_BY_DATATYPE = Map.ofEntries(
+        Map.entry(String.class, Set.of("eq", "ne", "isNull", "isNotNull", "like", "ilike", "notLike", "notILike", "startsWith", "endsWith", "regexp", "notRegexp", "iregexp", "notIRegexp", "any", "in", "notIn")),
+        Map.entry(UUID.class, Set.of("eq", "ne", "isNull", "isNotNull", "like", "ilike", "notLike", "notILike", "startsWith", "endsWith", "regexp", "notRegexp", "iregexp", "notIRegexp", "any", "in", "notIn")),
+        Map.entry(Character.class, Set.of("eq", "ne", "isNull", "isNotNull", "like", "ilike", "notLike", "notILike", "startsWith", "endsWith", "regexp", "notRegexp", "iregexp", "notIRegexp", "any", "in", "notIn")),
+        Map.entry(Boolean.class, Set.of("eq", "ne", "isNull", "isNotNull", "isTrue", "isFalse")),
+        Map.entry(Integer.class, Set.of("eq", "ne", "isNull", "isNotNull", "lt", "lte", "gt", "gte", "in", "notIn", "any", "between", "notBetween")),
+        Map.entry(Long.class, Set.of("eq", "ne", "isNull", "isNotNull", "lt", "lte", "gt", "gte", "in", "notIn", "any", "between", "notBetween")),
+        Map.entry(Double.class, Set.of("eq", "ne", "isNull", "isNotNull", "lt", "lte", "gt", "gte", "in", "notIn", "any", "between", "notBetween")),
+        Map.entry(BigInteger.class, Set.of("eq", "ne", "isNull", "isNotNull", "lt", "lte", "gt", "gte", "in", "notIn", "any", "between", "notBetween")),
+        Map.entry(BigDecimal.class, Set.of("eq", "ne", "isNull", "isNotNull", "lt", "lte", "gt", "gte", "in", "notIn", "any", "between", "notBetween")),
+        Map.entry(LocalDateTime.class, Set.of("eq", "ne", "isNull", "isNotNull", "lt", "lte", "gt", "gte", "in", "notIn", "any", "between", "notBetween"))
+    );
+
+    // here for reference
+    public static final String OP_REGEX = "(eq|ne|isNull|isNotNull|isTrue|isFalse|or|gt|gte|lt|lte|between|notBetween|in|notIn|like|ilike|notLike|notILike|startsWith|endsWith|regexp|notRegexp|iregexp|notIRegexp|any)";
+
+    public static final String FILED_QUERY_REGEX = "([a-z]+)\\|([\\w\\-\\s]+)";
+
+    public static final String SINGLE_QUERY_REGEX = "query<([\\w\\-]+)\\|([a-z]+)\\|([\\w\\-\\s]+)>";
+    public static final String ANDLIST_REGEX = "and<((,?query<([\\w\\-]+)\\|([a-z]+)\\|([\\w\\-\\s]+)>)*)>";
+    public static final String GLOBAL_OR_REGEX = "^or<(,?and<((,?query<([\\w\\-]+)\\|([a-z]+)\\|([\\w\\-\\s]+)>)*)>)*>$";
+
+    public static final Pattern FILED_QUERY_REGEX_PATTERN = Pattern.compile(FILED_QUERY_REGEX);
+    public static final Pattern SINGLE_QUERY_REGEX_PATTERN = Pattern.compile(SINGLE_QUERY_REGEX);
+    public static final Pattern ANDLIST_REGEX_PATTERN = Pattern.compile(ANDLIST_REGEX);
+
+    public static <T> Specification<T> convertParamsToSearchPredicates(Map<String, String> queryParams, Class<? extends T> entity) {{
+        // if "query" param was given, prefer processing that
+        // else, process query params as separate field predicates
+        String query = queryParams.getOrDefault("query", null);
+        boolean isQueryStringFormat = (query != null && query.matches(RequestParamsUtils.GLOBAL_OR_REGEX));
+        return isQueryStringFormat
+            ? RequestParamsUtils.handleQueryStringParam(queryParams, entity)
+            : RequestParamsUtils.handleFieldsQueryParams(queryParams, entity);
+    }}
+
+
+    public static <T> Specification<T> handleFieldsQueryParams(Map<String, String> queryParams, Class<? extends T> entity) {{
+        List<Specification<T>> andSpecs = new ArrayList<>();
+
+        Map<String, Class<?>> entityClassFieldDefs = CommonUtils.getClassFieldNamesAndTypes(entity);
+
+        for (String fieldName : queryParams.keySet()) {{
+            Matcher singleQueryMatcher = RequestParamsUtils.FILED_QUERY_REGEX_PATTERN.matcher(queryParams.get(fieldName));
+            if (singleQueryMatcher.find()) {{
+                String queryOp = singleQueryMatcher.group(1);
+                String queryValue = singleQueryMatcher.group(2);
+                Specification<T> spec = RequestParamsUtils.buildPredicate(entityClassFieldDefs, entity, fieldName, queryOp, queryValue);
+                andSpecs.add(spec);
+            }}
+        }}
+
+        return (root, query, cb) -> {{
+            boolean useOrWhereClause = queryParams.containsKey("_or") && queryParams.get("_or").equalsIgnoreCase("true");
+            List<Predicate> predicateList = andSpecs.stream().map(spec -> spec.toPredicate(root, query, cb)).toList();
+            return useOrWhereClause
+                ? cb.or(predicateList.toArray(new Predicate[0]))
+                : cb.and(predicateList.toArray(new Predicate[0]));
+        }};
+    }}
+
+    public static <T> Specification<T> handleQueryStringParam(Map<String, String> queryParams, Class<? extends T> entity) {{
+        List<Specification<T>> andSpecs = new ArrayList<>();
+
+        Map<String, Class<?>> entityClassFieldDefs = CommonUtils.getClassFieldNamesAndTypes(entity);
+
+        Matcher andListQueryMatcher = RequestParamsUtils.ANDLIST_REGEX_PATTERN.matcher(queryParams.get("query"));
+        List<String> andListCaptures = CommonUtils.getAllCapturesFromMatcher(andListQueryMatcher);
+
+        for (String andListCapture : andListCaptures) {{
+            Matcher singleQueryMatcher = RequestParamsUtils.SINGLE_QUERY_REGEX_PATTERN.matcher(andListCapture);
+            List<Specification<T>> specs = new ArrayList<>();
+            while (singleQueryMatcher.find()) {{
+                String queryField = singleQueryMatcher.group(1);
+                String queryOp = singleQueryMatcher.group(2);
+                Object queryValue = singleQueryMatcher.group(3);
+                Specification<T> spec = RequestParamsUtils.buildPredicate(entityClassFieldDefs, entity, queryField, queryOp, queryValue);
+                specs.add(spec);
+            }}
+            Specification<T> specification = null;
+            for (Specification<T> s : specs) {{
+                if (specification == null) {{
+                    specification = s;
+                }}
+                else {{
+                    specification.and(s);
+                }}
+            }}
+            if (specification != null) {{
+                andSpecs.add(specification);
+            }}
+        }}
+
+        return (root, query, cb) -> {{
+            List<Predicate> predicateList = andSpecs.stream().map(spec -> spec.toPredicate(root, query, cb)).toList();
+            return cb.or(predicateList.toArray(new Predicate[0]));
+        }};
+    }}
+
+    public static <T> Specification<T> buildPredicate(Map<String, Class<?>> entityClassFieldDefs, Class<?> entity, String fieldName, String op, Object fieldValue) {{
+        Class<?> fieldType = entityClassFieldDefs.getOrDefault(fieldName, null);
+        if (fieldType == null) {{
+            return (root, query1, cb) -> cb.conjunction();
+        }}
+        boolean isAcceptedOpForType = (
+            RequestParamsUtils.ACCEPTED_OPS_BY_DATATYPE.containsKey(fieldType)
+            && RequestParamsUtils.ACCEPTED_OPS_BY_DATATYPE.get(fieldType).contains(op)
+        );
+        if (!isAcceptedOpForType) {{
+            return (root, query1, cb) -> cb.conjunction();
+        }}
+        try {{
+            boolean hasIgnoreAnnotation = entity.getDeclaredField(fieldName).isAnnotationPresent(IgnoreOnSearch.class);
+            if (hasIgnoreAnnotation) {{
+                return (root, query1, cb) -> cb.conjunction();
+            }}
+        }}
+        catch (NoSuchFieldException ex) {{
+            return (root, query1, cb) -> cb.conjunction();
+        }}
+
+        Object useValue = fieldValue;
+        if (fieldType.equals(UUID.class)) {{
+            useValue = UUID.fromString((String) fieldValue);
+        }}
+
+        Object finalUseValue = useValue;
+        return (Root<T> root, CriteriaQuery<?> query1, CriteriaBuilder cb) -> {{
+            FieldOpFn<T> fieldOpFn = RequestParamsUtils.makeQueryBuilder();
+            return fieldOpFn.fn(root, query1, cb, fieldName, op, finalUseValue);
+        }};
+    }}
+
+    public static <T> FieldOpFn<T> makeQueryBuilder() {{
+        return (Root<T> root, CriteriaQuery<?> query, CriteriaBuilder cb, String field, String operator, Object queryValue) -> {{
+            Object[] values = String.valueOf(queryValue).split("|");
+
+            return switch (operator) {{
+                case "eq" -> cb.equal(root.get(field), queryValue);
+                case "ne" -> cb.notEqual(root.get(field), queryValue);
+                case "isNull" -> cb.isNull(root.get(field));
+                case "isNotNull" -> cb.isNotNull(root.get(field));
+                case "isTrue" -> cb.isTrue(root.get(field));
+                case "isFalse" -> cb.isFalse(root.get(field));
+                case "gt" -> cb.greaterThan(root.get(field), (Comparable) queryValue);
+                case "gte" -> cb.greaterThanOrEqualTo(root.get(field), (Comparable) queryValue);
+                case "lt" -> cb.lessThan(root.get(field), (Comparable) queryValue);
+                case "lte" -> cb.lessThanOrEqualTo(root.get(field), (Comparable) queryValue);
+                case "between" -> cb.between(root.get(field), (Comparable) values[0], (Comparable) values[1]);
+                case "notBetween" -> cb.between(root.get(field), (Comparable) values[0], (Comparable) values[1]).not();
+                case "in" -> cb.in(root.get(field)).value(values);
+                case "notIn" -> cb.not(root.get(field)).in(values);
+                case "like" -> cb.like(root.get(field), "%" + queryValue + "%");
+                case "ilike" -> cb.like(cb.lower(root.get(field)), "%" + String.valueOf(queryValue).toLowerCase() + "%");
+                case "notLike" -> cb.notLike(root.get(field), "%" + queryValue + "%");
+                case "notILike" -> cb.notLike(cb.lower(root.get(field)), "%" + String.valueOf(queryValue).toLowerCase() + "%");
+                case "startsWith" -> cb.like(root.get(field), queryValue + "%");
+                case "endsWith" -> cb.like(root.get(field), "%" + queryValue);
+                case "regexp" -> cb.like(root.get(field), queryValue.toString());
+                case "notRegexp" -> cb.notLike(root.get(field), queryValue.toString());
+                case "iregexp" -> cb.like(cb.lower(root.get(field)), queryValue.toString());
+                case "notIRegexp" -> cb.notLike(cb.lower(root.get(field)), queryValue.toString());
+
+                default -> cb.conjunction();
+            }};
+        }};
+    }}
+
+}}
+"""
+    write_to_file(contents = request_params_utils, path_full = f'src/utils/RequestParamsUtils.java')
+    
+    ignore_on_search_annotation = f"""\
+package {package_prefix}.annotations;
+
+
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
+@Target(ElementType.FIELD)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface IgnoreOnSearch {{
+}}
+"""
+    write_to_file(contents = ignore_on_search_annotation, path_full = f'src/annotations/IgnoreOnSearch.java')
+    
+    
+    app_javas = f"""\
+package {package_prefix};
+
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication(scanBasePackages = {{ "{package_prefix}" }})
+public class App {{
+
+    public static void main(String[] args) {{
+        SpringApplication.run(App.class, args);
+    }}
+
+}}
+"""
+    write_to_file(contents = app_javas, path_full = f'src/App.java')
+
     
     
     
-# END OF HELPER CLASSES
+    
+    
+
 
 if __name__ == "__main__":
     """
@@ -1729,7 +2099,7 @@ if __name__ == "__main__":
     );
     """
     
-    app_package_prefix = f"<enter_package_name>"
+    app_package_prefix = f"<enter_app_package>"
   
     sql_configs = [
       # format: { "service": "service_name", "sql_path": "full/path/to/sql_file.sql" }
@@ -1739,7 +2109,7 @@ if __name__ == "__main__":
       shutil.rmtree("src")
       
       
-    create_helper_classes("<enter_package_name>")
+    create_helper_classes("<enter_app_package>")
     
     main_services_enum = generate_main_services_enum([ c['service'] for c in sql_configs ], app_package_prefix)
     write_to_file(contents = main_services_enum, path_full = f'src/enums/ServiceNames.java')
