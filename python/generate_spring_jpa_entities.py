@@ -259,7 +259,7 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
         Integer page = pageResults.getNumber();
         Integer pages = pageResults.getTotalPages();
         Integer resultsCount = resultsData.size();
-        Long tableCount = pageResults.getTotalElements();
+        Long tableCount = this.{var_name}Repository.count();
 
         return new PaginationResponse<>(
             resultsData,
@@ -295,7 +295,7 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
         Integer page = pageResults.getNumber();
         Integer pages = pageResults.getTotalPages();
         Integer resultsCount = resultsData.size();
-        Long tableCount = pageResults.getTotalElements();
+        Long tableCount = this.{var_name}Repository.count();
         
         return new PaginationResponse<>(
             resultsData,
