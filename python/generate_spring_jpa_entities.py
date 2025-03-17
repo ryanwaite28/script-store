@@ -1962,12 +1962,14 @@ public class RequestParamsUtils {{
     public static final String OP_REGEX = "(eq|ne|isNull|isNotNull|isTrue|isFalse|or|gt|gte|lt|lte|between|notBetween|in|notIn|like|ilike|notLike|notILike|startsWith|endsWith|regexp|notRegexp|iregexp|notIRegexp|any)";
 
     public static final String FILED_QUERY_REGEX = "([a-z]+)\\|([\\w\\-\\s]+)";
+    public static final String NON_VALUE_QUERY_REGEX = "(isNull|isNotNull|isTrue|isFalse)";
 
     public static final String SINGLE_QUERY_REGEX = "query<([\\w\\-]+)\\|([a-z]+)\\|([\\w\\-\\s]+)>";
     public static final String ANDLIST_REGEX = "and<((,?query<([\\w\\-]+)\\|([a-z]+)\\|([\\w\\-\\s]+)>)*)>";
     public static final String GLOBAL_OR_REGEX = "^or<(,?and<((,?query<([\\w\\-]+)\\|([a-z]+)\\|([\\w\\-\\s]+)>)*)>)*>$";
 
     public static final Pattern FILED_QUERY_REGEX_PATTERN = Pattern.compile(FILED_QUERY_REGEX);
+    public static final Pattern NON_VALUE_QUERY_REGEX_PATTERN = Pattern.compile(NON_VALUE_QUERY_REGEX);
     public static final Pattern SINGLE_QUERY_REGEX_PATTERN = Pattern.compile(SINGLE_QUERY_REGEX);
     public static final Pattern ANDLIST_REGEX_PATTERN = Pattern.compile(ANDLIST_REGEX);
 
@@ -1993,6 +1995,12 @@ public class RequestParamsUtils {{
                 String queryOp = singleQueryMatcher.group(1);
                 String queryValue = singleQueryMatcher.group(2);
                 Specification<T> spec = RequestParamsUtils.buildPredicate(entityClassFieldDefs, entity, fieldName, queryOp, queryValue);
+                andSpecs.add(spec);
+            }}
+            Matcher nonValueMatcher = RequestParamsUtils.NON_VALUE_QUERY_REGEX_PATTERN.matcher(queryParams.get(fieldName));
+            if (nonValueMatcher.find()) {{
+                String queryOp = nonValueMatcher.group(1);
+                Specification<T> spec = RequestParamsUtils.buildPredicate(entityClassFieldDefs, entity, fieldName, queryOp, null);
                 andSpecs.add(spec);
             }}
         }}
@@ -2068,14 +2076,14 @@ public class RequestParamsUtils {{
 
         return (Root<T> root, CriteriaQuery<?> query1, CriteriaBuilder cb) -> {{
             FieldOpFn<T> fieldOpFn = RequestParamsUtils.makeQueryBuilder();
-            Object useValue = CommonUtils.parseObject(fieldValue, fieldType);
+            Object useValue = CoerceUtils.returnOnNotNull(fieldValue, v -> CommonUtils.parseObject(v, fieldType));
             return fieldOpFn.fn(root, query1, cb, fieldName, op, useValue);
         }};
     }}
 
     public static <T> FieldOpFn<T> makeQueryBuilder() {{
         return (Root<T> root, CriteriaQuery<?> query, CriteriaBuilder cb, String field, String operator, Object queryValue) -> {{
-            Object[] values = String.valueOf(queryValue).split("|");
+            Object[] values = String.valueOf(queryValue).split("{ "\\\\" }|");
 
             return switch (operator) {{
                 case "eq" -> cb.equal(root.get(field), queryValue);
@@ -2147,7 +2155,7 @@ public class App {{
 """
     write_to_file(contents = app_javas, path_full = f'src/App.java')
 
-    
+
     
     
     
