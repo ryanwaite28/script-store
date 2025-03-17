@@ -2065,15 +2065,10 @@ public class RequestParamsUtils {{
             return (root, query1, cb) -> cb.conjunction();
         }}
 
-        Object useValue = fieldValue;
-        if (fieldType.equals(UUID.class)) {{
-            useValue = UUID.fromString((String) fieldValue);
-        }}
-
-        Object finalUseValue = useValue;
         return (Root<T> root, CriteriaQuery<?> query1, CriteriaBuilder cb) -> {{
             FieldOpFn<T> fieldOpFn = RequestParamsUtils.makeQueryBuilder();
-            return fieldOpFn.fn(root, query1, cb, fieldName, op, finalUseValue);
+            Object useValue = CommonUtils.parseObject(fieldValue, fieldType);
+            return fieldOpFn.fn(root, query1, cb, fieldName, op, useValue);
         }};
     }}
 
