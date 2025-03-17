@@ -245,7 +245,7 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
         }}
 
         int queryOffset = queryParams.containsKey("offset") ? Integer.parseInt(queryParams.get("offset")) : 0;
-        int queryLimit = queryParams.containsKey("limit") ? Integer.parseInt(queryParams.get("limit")) : 0;
+        int queryLimit = queryParams.containsKey("limit") ? Integer.parseInt(queryParams.get("limit")) : 10;
 
         Specification<{class_name}Entity> querySpec = RequestParamsUtils.convertParamsToSearchPredicates(queryParams, {class_name}Entity.class);
 
