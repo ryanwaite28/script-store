@@ -1501,7 +1501,8 @@ public class CommonUtils {{
             return BigDecimal.valueOf((Long) value);
         }}
         if (targetClass.equals(LocalDateTime.class)) {{
-            return LocalDateTime.parse((String) value);
+            String useValue = ((String) value).contains("T") ? (String) value : ((String) value) + "T00:00:00";
+            return LocalDateTime.parse(useValue);
         }}
 
         return value;
