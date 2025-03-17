@@ -2179,15 +2179,19 @@ public class App {{
 
 if __name__ == "__main__":
     """
+    NOTE: assumptions are made about the SQL file format.
+    1. the database is Postgres
+    2. tables have a {schema.table} format
+    
     SQL file table definitions are expected to be in the following format:
     
-    CREATE TABLE IF NOT EXISTS {table_name} (
+    CREATE TABLE IF NOT EXISTS {schema}.{table_name} (
         {column_name} {data_type in UPPERCASE} NOT NULL etc...,
     );
     
     Example:
     
-    CREATE TABLE IF NOT EXISTS users (
+    CREATE TABLE IF NOT EXISTS schema.users (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         metadata JSONB DEFAULT NULL,
         created_at_utc TIMESTAMP NOT NULL DEFAULT NOW(),
