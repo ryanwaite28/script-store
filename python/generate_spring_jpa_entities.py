@@ -1402,6 +1402,11 @@ import java.util.function.Predicate;
 
 public class CommonUtils {{
 
+    private final ObjectMapper objectMapper = new ObjectMapper()
+        .registerModule(new Jdk8Module())
+        .registerModule(new JavaTimeModule())
+        ;
+
     public static <T extends Enum<T>> T enumFromName(Class<T> enumClass, String enumName) {{
         if (enumName == null) {{
             return null;
@@ -1427,6 +1432,79 @@ public class CommonUtils {{
         String[] fileNameSplit = file.getOriginalFilename().split("\\.");
         String extension = fileNameSplit[fileNameSplit.length - 1];
         return String.format("%s.%s.%s", UUID.randomUUID(), Instant.now().toEpochMilli(), extension);
+    }}
+
+    public static Map<String, Object> parseJsonString(String json) {{
+        try {{
+            ObjectMapper objectMapper = new ObjectMapper()
+                .registerModule(new Jdk8Module())
+                .registerModule(new JavaTimeModule())
+                ;
+
+            Map<String, Object> metadata = objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {{}});
+            return metadata;
+        }}
+        catch (JsonProcessingException e) {{
+            throw new RuntimeException(e);
+        }}
+    }}
+
+    public static Map<String, Class<?>> getClassFieldNamesAndTypes(Class<?> classDef) {{
+        Field[] classFields = classDef.getDeclaredFields();
+        Map<String, Class<?>> fieldDefs = new HashMap<>();
+
+        for (Field field : classFields) {{
+            fieldDefs.put(field.getName(), field.getType());
+        }}
+
+        return fieldDefs;
+    }}
+
+    public static List<String> getAllCapturesFromMatcher(Matcher matcher) {{
+        List<String> captures = new ArrayList<>();
+        // capture all top-level and query lists
+        while (matcher.find()) {{
+            String match = matcher.group();
+            if (match == null) {{
+                continue;
+            }}
+            if (!captures.contains(match)) {{
+                captures.add(match);
+            }}
+        }}
+        return captures;
+    }}
+
+    public static Object parseObject(@NotNull Object value, Class<?> targetClass) {{
+        if (targetClass.equals(String.class) || targetClass.equals(Character.class)) {{
+            return String.valueOf(value);
+        }}
+        if (targetClass.equals(UUID.class)) {{
+            return UUID.fromString((String) value);
+        }}
+        if (targetClass.equals(Boolean.class)) {{
+            return Boolean.valueOf((Boolean) value);
+        }}
+        if (targetClass.equals(Integer.class)) {{
+            return Integer.valueOf((String) value);
+        }}
+        if (targetClass.equals(Long.class)) {{
+            return Long.valueOf((String) value);
+        }}
+        if (targetClass.equals(Double.class)) {{
+            return Double.valueOf((String) value);
+        }}
+        if (targetClass.equals(BigInteger.class)) {{
+            return BigInteger.valueOf((Long) value);
+        }}
+        if (targetClass.equals(BigDecimal.class)) {{
+            return BigDecimal.valueOf((Long) value);
+        }}
+        if (targetClass.equals(LocalDateTime.class)) {{
+            return LocalDateTime.parse((String) value);
+        }}
+
+        return value;
     }}
 
 }}
