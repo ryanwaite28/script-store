@@ -1961,12 +1961,12 @@ public class RequestParamsUtils {{
     // here for reference
     public static final String OP_REGEX = "(eq|ne|isNull|isNotNull|isTrue|isFalse|or|gt|gte|lt|lte|between|notBetween|in|notIn|like|ilike|notLike|notILike|startsWith|endsWith|regexp|notRegexp|iregexp|notIRegexp|any)";
 
-    public static final String FILED_QUERY_REGEX = "([a-z]+)\\|([\\w\\-\\s]+)";
+    public static final String FILED_QUERY_REGEX = "([a-z]+)\\|([\\w\\-\\s,\\|]+)";
     public static final String NON_VALUE_QUERY_REGEX = "(isNull|isNotNull|isTrue|isFalse)";
 
-    public static final String SINGLE_QUERY_REGEX = "query<([\\w\\-]+)\\|([a-z]+)\\|([\\w\\-\\s]+)>";
-    public static final String ANDLIST_REGEX = "and<((,?query<([\\w\\-]+)\\|([a-z]+)\\|([\\w\\-\\s]+)>)*)>";
-    public static final String GLOBAL_OR_REGEX = "^or<(,?and<((,?query<([\\w\\-]+)\\|([a-z]+)\\|([\\w\\-\\s]+)>)*)>)*>$";
+    public static final String SINGLE_QUERY_REGEX = "query<([\\w\\-]+)\\|([a-z]+)\\|([\\w\\-\\s,\\|]+)>";
+    public static final String ANDLIST_REGEX = "and<((,?query<([\\w\\-]+)\\|([a-z]+)\\|([\\w\\-\\s,\\|]+)>)*)>";
+    public static final String GLOBAL_OR_REGEX = "^or<(,?and<((,?query<([\\w\\-]+)\\|([a-z]+)\\|([\\w\\-\\s,\\|]+)>)*)>)*>$";
 
     public static final Pattern FILED_QUERY_REGEX_PATTERN = Pattern.compile(FILED_QUERY_REGEX);
     public static final Pattern NON_VALUE_QUERY_REGEX_PATTERN = Pattern.compile(NON_VALUE_QUERY_REGEX);
@@ -2076,15 +2076,30 @@ public class RequestParamsUtils {{
 
         return (Root<T> root, CriteriaQuery<?> query1, CriteriaBuilder cb) -> {{
             FieldOpFn<T> fieldOpFn = RequestParamsUtils.makeQueryBuilder();
-            Object useValue = CoerceUtils.returnOnNotNull(fieldValue, v -> CommonUtils.parseObject(v, fieldType));
+            if (fieldValue == null) {{
+                return fieldOpFn.fn(root, query1, cb, fieldName, op, null);
+            }}
+
+            String valueAsString = String.valueOf(fieldValue);
+            Object useValue;
+            if (valueAsString.contains(",")) {{
+                // is comma-separated list
+                List<Object> list = new ArrayList<>();
+                for (String v : valueAsString.split(",")) {{
+                    list.add(CommonUtils.parseObject(v, fieldType));
+                }}
+                useValue = list;
+            }}
+            else {{
+                useValue = CommonUtils.parseObject(fieldValue, fieldType);
+            }}
+
             return fieldOpFn.fn(root, query1, cb, fieldName, op, useValue);
         }};
     }}
 
     public static <T> FieldOpFn<T> makeQueryBuilder() {{
         return (Root<T> root, CriteriaQuery<?> query, CriteriaBuilder cb, String field, String operator, Object queryValue) -> {{
-            Object[] values = String.valueOf(queryValue).split("{ "\\\\" }|");
-
             return switch (operator) {{
                 case "eq" -> cb.equal(root.get(field), queryValue);
                 case "ne" -> cb.notEqual(root.get(field), queryValue);
@@ -2096,10 +2111,10 @@ public class RequestParamsUtils {{
                 case "gte" -> cb.greaterThanOrEqualTo(root.get(field), (Comparable) queryValue);
                 case "lt" -> cb.lessThan(root.get(field), (Comparable) queryValue);
                 case "lte" -> cb.lessThanOrEqualTo(root.get(field), (Comparable) queryValue);
-                case "between" -> cb.between(root.get(field), (Comparable) values[0], (Comparable) values[1]);
-                case "notBetween" -> cb.between(root.get(field), (Comparable) values[0], (Comparable) values[1]).not();
-                case "in" -> cb.in(root.get(field)).value(values);
-                case "notIn" -> cb.not(root.get(field)).in(values);
+                case "between" -> cb.between(root.get(field), (Comparable) ((List<?>) queryValue).get(0), (Comparable) ((List<?>) queryValue).get(1));
+                case "notBetween" -> cb.between(root.get(field), (Comparable) ((List<?>) queryValue).get(0), (Comparable) ((List<?>) queryValue).get(1)).not();
+                case "in" -> cb.in(root.get(field)).value(queryValue);
+                case "notIn" -> cb.not(root.get(field)).in(queryValue);
                 case "like" -> cb.like(root.get(field), "%" + queryValue + "%");
                 case "ilike" -> cb.like(cb.lower(root.get(field)), "%" + String.valueOf(queryValue).toLowerCase() + "%");
                 case "notLike" -> cb.notLike(root.get(field), "%" + queryValue + "%");
