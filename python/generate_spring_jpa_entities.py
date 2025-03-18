@@ -205,12 +205,15 @@ package {package_prefix}.services.implementations;
 import {app_package_prefix}.utils.RequestParamsUtils;
 import {app_package_prefix}.domain.responses.PaginationResponse;
 import {package_prefix}.dto.searches.{class_name}SearchParams;
+import {package_prefix}.enums.errorcodes.{class_name}ErrorCodes;
+import {package_prefix}.enums.modelevents.{class_name}ErrorCodes;
 import {package_prefix}.services.interfaces.{class_name}Service;
 import {package_prefix}.entities.{class_name}Entity;
 import {package_prefix}.dto.{class_name}Dto;
 import {package_prefix}.repositories.{class_name}Repository;
 import org.springframework.stereotype.Service;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.http.HttpStatus;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import java.util.Map;
@@ -382,7 +385,7 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
     
     private void validateCreate{class_name}Dto({class_name}Dto dto) {{
         if (dto == null) {{
-            throw new IllegalArgumentException("DTO cannot be null");
+            throw new DomainRuntimeException("DTO was null", HttpStatus.BAD_REQUEST, {class_name}ErrorCodes.InvalidData);
         }}
         
         if (dto.getId() != null) {{
@@ -392,7 +395,7 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
     
     private void validateUpdate{class_name}Dto({class_name}Dto dto) {{
         if (dto == null) {{
-            throw new IllegalArgumentException("DTO cannot be null");
+            throw new DomainRuntimeException("DTO was null", HttpStatus.BAD_REQUEST, {class_name}ErrorCodes.InvalidData);
         }}
         
         if (dto.getId() == null) {{
@@ -675,7 +678,7 @@ def generate_model_events_enum(table_name, columns, package_prefix):
         enum_values_per_field.append(f"    {enum_value_name}_{col_name.upper()}_DELETED")
     
     return f"""\
-package {package_prefix}.enums.models;
+package {package_prefix}.enums.modelevents;
 
 public enum {class_name}ModelEvents {{
     {enum_value_name}_CREATED,
