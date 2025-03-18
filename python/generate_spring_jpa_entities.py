@@ -232,12 +232,9 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
  
     private final {class_name}Repository {var_name}Repository;
     
-    public {class_name}ServiceImpl(
-        {class_name}Repository {var_name}Repository
-    ) {{
+    public {class_name}ServiceImpl({class_name}Repository {var_name}Repository) {{
         this.{var_name}Repository = {var_name}Repository;
     }}
-    
     
     
     
