@@ -350,7 +350,7 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
     
     @Override
     public {class_name}Dto patch(UUID userId, UUID id, {class_name}Dto dto){{
-        this.validateUpdate{class_name}Dto(dto);
+        this.validatePatch{class_name}Dto(dto);
         
         {class_name}Entity entity = this.{var_name}Repository.findById(id).orElse(null);
         if (entity == null || entity.getDeletedAtUtc() != null) {{
@@ -396,6 +396,17 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
     }}
     
     private void validateUpdate{class_name}Dto({class_name}Dto dto) {{
+        this.validateRequirements(dto);
+        if (dto == null) {{
+            throw new DomainRuntimeException("DTO was null", HttpStatus.BAD_REQUEST, {class_name}ErrorCodes.InvalidData);
+        }}
+        
+        if (dto.getId() == null) {{
+            throw new IllegalArgumentException("ID must be null");
+        }}
+    }}
+    
+    private void validatePatch{class_name}Dto({class_name}Dto dto) {{
         this.validateRequirements(dto);
         if (dto == null) {{
             throw new DomainRuntimeException("DTO was null", HttpStatus.BAD_REQUEST, {class_name}ErrorCodes.InvalidData);
