@@ -380,7 +380,12 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
     }}
     
     
+    private void validateRequirements({class_name}Dto dto) {{
+        // this is validations common on both create and update
+    }}
+    
     private void validateCreate{class_name}Dto({class_name}Dto dto) {{
+        this.validateRequirements(dto);
         if (dto == null) {{
             throw new DomainRuntimeException("DTO was null", HttpStatus.BAD_REQUEST, {class_name}ErrorCodes.InvalidData);
         }}
@@ -391,6 +396,7 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
     }}
     
     private void validateUpdate{class_name}Dto({class_name}Dto dto) {{
+        this.validateRequirements(dto);
         if (dto == null) {{
             throw new DomainRuntimeException("DTO was null", HttpStatus.BAD_REQUEST, {class_name}ErrorCodes.InvalidData);
         }}
