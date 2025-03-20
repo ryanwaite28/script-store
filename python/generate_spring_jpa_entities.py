@@ -1206,7 +1206,7 @@ public class {class_name}Entity {{
 def parse_sql_file(sql_config, app_package_prefix):
     service_name = sql_config['service']
     sql_file_path = sql_config['sql_path']
-    datasources_package_prefix = f"<enter_app_package>.datasources.{sql_config['service']}"
+    datasources_package_prefix = f"{app_package_prefix}.datasources.{sql_config['service']}"
   
   
     with open(sql_file_path, 'r') as sql_file:
@@ -2247,7 +2247,7 @@ if __name__ == "__main__":
       shutil.rmtree("src")
       
       
-    create_helper_classes("<enter_app_package>")
+    create_helper_classes(app_package_prefix)
     
     main_services_enum = generate_main_services_enum([ c['service'] for c in sql_configs ], app_package_prefix)
     write_to_file(contents = main_services_enum, path_full = f'src/enums/ServiceNames.java')
