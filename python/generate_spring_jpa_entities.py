@@ -476,28 +476,44 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
 
 def generate_typescript_types_classes(table_name, columns):
     class_name = make_class_name(table_name)
+    var_name = class_name[0].lower() + class_name[1:]
     
+    typed_fields = []
     fields = []
     
     for col_name, data_type in columns.items():
         ts_type = sql_to_typescript_type(data_type)
         
-        fields.append(f"{snake_to_camel(col_name)}: {ts_type}")
+        typed_fields.append(f"{snake_to_camel(col_name)}: {ts_type}")
+        fields.append(f"{snake_to_camel(col_name)}")
+        
     
     return f"""\
 export type {class_name}Type = {{
-{",\n".join([ f"  {f}" for f in fields])}
+{",\n".join([ f"  {f}" for f in typed_fields])}
 }}
 
 export interface {class_name}Interface {{
-{",\n".join([ f"  {f}" for f in fields])}
+{",\n".join([ f"  {f}" for f in typed_fields])}
 }}
 
 export class {class_name}Entity implements {class_name}Interface {{
 
   constructor(
-{",\n".join([ f"    public {f}" for f in fields])}
+{",\n".join([ f"    public {f}" for f in typed_fields])}
   ) {{}}
+  
+  public static fromDto({var_name}: {class_name}Type): {class_name}Entity {{
+    return new {class_name}Entity(
+{",\n".join([ f"      {var_name}.{f}" for f in fields])}
+    );
+  }}
+  
+  public toDto(): {class_name}Type {{
+    return {{
+{",\n".join([ f"      {f}: this.{f}" for f in fields])}
+    }};
+  }}
 
 }}
 """
@@ -1212,6 +1228,7 @@ def parse_sql_file(sql_config, app_package_prefix):
     
     not_found_exceptions = {}
     invalid_data_exceptions = {}
+    processing_exceptions = {}
     
     error_codes = {}
     
@@ -1254,6 +1271,7 @@ def parse_sql_file(sql_config, app_package_prefix):
         
         not_found_exceptions[table_name] = generate_exception(table_name, datasources_package_prefix, app_package_prefix, 'NotFoundException')
         invalid_data_exceptions[table_name] = generate_exception(table_name, datasources_package_prefix, app_package_prefix, 'InvalidDataException')
+        processing_exceptions[table_name] = generate_exception(table_name, datasources_package_prefix, app_package_prefix, 'ProcessingException')
         error_codes[table_name] = generate_error_codes(table_name, app_package_prefix, datasources_package_prefix)
         
     main_datasource_config = generate_datasource_config(service_name, app_package_prefix)
@@ -1283,6 +1301,7 @@ def parse_sql_file(sql_config, app_package_prefix):
       'model_names_enum': model_names_enum,
       'not_found_exceptions': not_found_exceptions,
       'invalid_data_exceptions': invalid_data_exceptions,
+      'processing_exceptions': processing_exceptions,
       'error_codes': error_codes,
     }
 
@@ -2221,6 +2240,7 @@ if __name__ == "__main__":
   
     sql_configs = [
       # format: { "service": "service_name", "sql_path": "full/path/to/sql_file.sql" }
+      { "service": "myah", "sql_path": "/Users/ryanwaite/Desktop/sql-projects/myah/sql/app/ddl/app.v1.sql" }
     ]
     
     if os.path.exists("src"):
@@ -2250,6 +2270,7 @@ if __name__ == "__main__":
       write_items_to_files(items = results['model_event_enums'], classNameSuffix = "ModelEvents", output_dir = f'src/datasources/{sql_config['service']}/enums/models')
       write_items_to_files(items = results['not_found_exceptions'], classNameSuffix = "NotFoundException", output_dir = f'src/datasources/{sql_config['service']}/exceptions')
       write_items_to_files(items = results['invalid_data_exceptions'], classNameSuffix = "InvalidDataException", output_dir = f'src/datasources/{sql_config['service']}/exceptions')
+      write_items_to_files(items = results['processing_exceptions'], classNameSuffix = "ProcessingException", output_dir = f'src/datasources/{sql_config['service']}/exceptions')
       write_items_to_files(items = results['error_codes'], classNameSuffix = "ErrorCodes", output_dir = f'src/datasources/{sql_config['service']}/enums/errorcodes')
       
       write_to_file(contents = results['main_datasource_config'], path_full = f'src/configs/DatasourceJpaConfig{use_service_name}Db.java')
