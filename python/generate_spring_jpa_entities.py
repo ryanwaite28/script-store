@@ -319,7 +319,7 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
     
     @Override
     public {class_name}Dto create(UUID userId, {class_name}Dto dto) {{
-        this.validateCreate{class_name}Dto(dto);
+        this.validateCreate{class_name}Dto(userId, dto);
         
         // using builder to control which fields are set for creation
         {class_name}Entity entity = {class_name}Dto.toEntity(
@@ -333,7 +333,7 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
     
     @Override
     public {class_name}Dto update(UUID userId, UUID id, {class_name}Dto dto) {{
-        this.validateUpdate{class_name}Dto(dto);
+        this.validateUpdate{class_name}Dto(userId, id, dto);
         
         {class_name}Entity entity = this.{var_name}Repository.findById(id).orElse(null);
         if (entity == null || entity.getDeletedAtUtc() != null) {{
@@ -350,7 +350,7 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
     
     @Override
     public {class_name}Dto patch(UUID userId, UUID id, {class_name}Dto dto){{
-        this.validatePatch{class_name}Dto(dto);
+        this.validatePatch{class_name}Dto(userId, id, dto);
         
         {class_name}Entity entity = this.{var_name}Repository.findById(id).orElse(null);
         if (entity == null || entity.getDeletedAtUtc() != null) {{
@@ -384,7 +384,7 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
         // this is validations common on both create and update
     }}
     
-    private void validateCreate{class_name}Dto({class_name}Dto dto) {{
+    private void validateCreate{class_name}Dto(UUID userId, {class_name}Dto dto) {{
         this.validateRequirements(dto);
         if (dto == null) {{
             throw new DomainRuntimeException("DTO was null", HttpStatus.BAD_REQUEST, {class_name}ErrorCodes.InvalidData);
@@ -395,7 +395,7 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
         }}
     }}
     
-    private void validateUpdate{class_name}Dto({class_name}Dto dto) {{
+    private void validateUpdate{class_name}Dto(UUID userId, UUID id, {class_name}Dto dto) {{
         this.validateRequirements(dto);
         if (dto == null) {{
             throw new DomainRuntimeException("DTO was null", HttpStatus.BAD_REQUEST, {class_name}ErrorCodes.InvalidData);
@@ -406,7 +406,7 @@ public class {class_name}ServiceImpl implements {class_name}Service {{
         }}
     }}
     
-    private void validatePatch{class_name}Dto({class_name}Dto dto) {{
+    private void validatePatch{class_name}Dto(UUID userId, UUID id, {class_name}Dto dto) {{
         this.validateRequirements(dto);
         if (dto == null) {{
             throw new DomainRuntimeException("DTO was null", HttpStatus.BAD_REQUEST, {class_name}ErrorCodes.InvalidData);
