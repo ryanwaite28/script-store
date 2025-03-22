@@ -2205,8 +2205,222 @@ public class App {{
 }}
 """
     write_to_file(contents = app_javas, path_full = f'src/App.java')
+    
+    
+    auth_controller = f"""\
+package {package_prefix}.controllers;
+
+import org.springframework.web.bind.annotation.*;
+import {package_prefix}.configs.jwt.JwtAuthorized;
+import {package_prefix}.services.interfaces.AuthService;
+import {package_prefix}.domain.dto.AuthResponseDto;
+import {package_prefix}.domain.requests.LoginUserPayload;
+import {package_prefix}.domain.requests.SignupUserPayload;
 
 
+
+@RestController
+@RequestMapping("/auth")
+public class AuthController {{
+  
+    private final AuthService authService;
+    
+    public AuthController(AuthService authService) {{
+      this.authService = authService;
+    }}
+    
+    
+    @GetMapping(value = "/refresh")
+    public DataResponse<AuthResponseDto> refreshJwtToken(@RequestAttribute("JWT") String jwt) {{
+        return new DataResponse<>(this.authService.refreshJwtToken(jwt));
+    }}
+
+    @GetMapping(value = "/parse")
+    public DataResponse<AuthResponseDto> parseJwtToken(@RequestAttribute("JWT") String jwt) {{
+        return new DataResponse<>(this.authService.parseJwtToken(jwt));
+    }}
+    
+    @PostMapping(value = "")
+    public DataResponse<AuthResponseDto> signupUser(@RequestBody SignupUserPayload payload) {{
+        return new DataResponse<>(this.authService.signupUser(payload));
+    }}
+
+    @PutMapping(value = "")
+    public DataResponse<AuthResponseDto> loginUser(@RequestBody LoginUserPayload payload) {{
+        return new DataResponse<>(this.authService.loginUser(payload));
+    }}
+  
+}}
+"""
+    write_to_file(contents = auth_controller, path_full = f'src/controllers/AuthController.java')
+    
+    
+    auth_service = f"""\
+package {package_prefix}.services.interfaces;
+
+import {package_prefix}.domain.dto.AuthResponseDto;
+import {package_prefix}.domain.requests.LoginUserPayload;
+import {package_prefix}.domain.requests.SignupUserPayload;
+
+
+public interface AuthService {{
+  
+    AuthResponseDto signupUser(SignupUserPayload payload);
+    
+    AuthResponseDto loginUser(LoginUserPayload payload);
+    
+    AuthResponseDto refreshJwtToken(String jwt);
+    
+    AuthResponseDto parseJwtToken(String jwt);
+    
+}}
+"""
+    write_to_file(contents = auth_service, path_full = f'src/services/interfaces/AuthService.java')
+    
+    
+    auth_service_impl = f"""\
+package {package_prefix}.services.implementations;
+
+import {package_prefix}.configs.jwt.JwtUtilsConfig;
+import {package_prefix}.domain.dto.AuthResponseDto;
+import {package_prefix}.domain.requests.LoginUserPayload;
+import {package_prefix}.domain.requests.SignupUserPayload;
+import {package_prefix}.services.interfaces.AuthService;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.io.IOException;
+import java.time.LocalDateTime;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+
+
+@Service
+public class AuthServiceImpl implements AuthService {{
+  
+    private final JwtUtilsConfig jwtUtilsConfig;
+    
+    public AuthServiceImpl(JwtUtilsConfig jwtUtilsConfig) {{
+        this.jwtUtilsConfig = jwtUtilsConfig;
+    }}
+    
+    @Override
+    @Transactional
+    public AuthResponseDto signupUser(SignupUserPayload payload) {{
+        // TODO: implement signupUser
+        return new AuthResponseDto();
+    }}
+    
+    @Override
+    @Transactional
+    public AuthResponseDto loginUser(LoginUserPayload payload) {{
+        // TODO: implement signupUser
+        return new AuthResponseDto();
+    }}
+    
+    
+    @Override
+    public AuthResponseDto refreshJwtToken(String jwt) {{
+        try {{
+            String userId = this.jwtUtilsConfig.verifyToken(jwt);
+            // TODO: implement refreshJwtToken
+            return new AuthResponseDto();
+        }}
+        catch (Exception ex) {{
+            throw new RuntimeException(String.format("Could not verify JWT: %s", jwt), ex);
+        }}
+    }}
+    
+    @Override
+    @Transactional
+    public AuthResponseDto parseJwtToken(String jwt) {{
+        try {{
+            String userId = this.jwtUtilsConfig.verifyToken(jwt);
+            // TODO: implement refreshJwtToken
+            return new AuthResponseDto();
+        }}
+        catch (Exception ex) {{
+            throw new RuntimeException(String.format("Could not verify JWT: %s", jwt), ex);
+        }}
+    }}
+      
+}}
+"""
+    write_to_file(contents = auth_service_impl, path_full = f'src/services/implementations/AuthServiceImpl.java')
+    
+    
+    auth_response_dto = f"""\
+package {package_prefix}.domain.dto;
+
+import lombok.Data;
+import lombok.Builder;
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
+
+
+@Data
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+public class AuthResponseDto {{
+  
+    private String jwt;
+    private String refreshToken;
+    private String userId;
+    // TODO: add more fields as needed
+    
+}}
+"""
+    write_to_file(contents = auth_response_dto, path_full = f'src/domain/dto/AuthResponseDto.java')
+    
+    
+    login_user_payload = f"""\
+package {package_prefix}.domain.requests;
+
+import lombok.Data;
+import lombok.Builder;
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
+
+
+@Data
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+public class LoginUserPayload {{
+  
+    private String email;
+    private String password;
+    
+}}
+"""
+    write_to_file(contents = login_user_payload, path_full = f'src/domain/requests/LoginUserPayload.java')
+    
+    
+    signup_user_payload = f"""\
+package {package_prefix}.domain.requests;
+
+import lombok.Data;
+import lombok.Builder;
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
+
+
+@Data
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+public class SignupUserPayload {{
+  
+    private String email;
+    private String password;
+    // TODO: add more fields as needed
+    
+}}
+"""
+    write_to_file(contents = signup_user_payload, path_full = f'src/domain/requests/SignupUserPayload.java')
+    
     
     
     
