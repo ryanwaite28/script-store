@@ -202,6 +202,8 @@ def generate_service_interface_implementation(table_name, columns, app_package_p
     return f"""\
 package {package_prefix}.services.implementations;
 
+import {package_prefix}.exceptions.DomainException;
+import {package_prefix}.exceptions.DomainRuntimeException;
 import {app_package_prefix}.utils.RequestParamsUtils;
 import {app_package_prefix}.domain.responses.PaginationResponse;
 import {package_prefix}.dto.searches.{class_name}SearchParams;
