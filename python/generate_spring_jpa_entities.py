@@ -1896,6 +1896,7 @@ public class DomainException extends Exception {{
     domain_runtime_exception = f"""\
 package {package_prefix}.exceptions;
 
+import {package_prefix}.interfaces.ErrorCode;
 import org.springframework.http.HttpStatus;
 import lombok.Getter;
 
