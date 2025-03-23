@@ -951,9 +951,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.UUID;
 import {package_prefix}.services.interfaces.{class_name}Service;
-import {package_prefix}.domain.responses.DataResponse;
-import {package_prefix}.domain.responses.JwtResults;
-import {package_prefix}.datasources.{sql_config['service']}.dto.*;
 
 
 
@@ -982,6 +979,7 @@ def generate_main_service_controller_advice(service_name, package_prefix):
     return f"""\
 package {package_prefix}.controllers.advices;
 
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.io.IOException;
 import org.springframework.http.HttpStatus;
@@ -2229,7 +2227,7 @@ import {package_prefix}.services.interfaces.AuthService;
 import {package_prefix}.domain.dto.AuthResponseDto;
 import {package_prefix}.domain.requests.LoginUserPayload;
 import {package_prefix}.domain.requests.SignupUserPayload;
-
+import {package_prefix}.domain.responses.DataResponse;
 
 
 @RestController
