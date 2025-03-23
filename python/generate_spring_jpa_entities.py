@@ -2491,7 +2491,7 @@ if __name__ == "__main__":
       write_items_to_files(items = results['service_interfaces'], classNameSuffix = "Service", output_dir = f'src/datasources/{sql_config['service']}/services/interfaces')
       write_items_to_files(items = results['service_implementations'], classNameSuffix = "ServiceImpl", output_dir = f'src/datasources/{sql_config['service']}/services/implementations')
       write_items_to_files(items = results['search_params'], classNameSuffix = "SearchParams", output_dir = f'src/datasources/{sql_config['service']}/dto/searches')
-      write_items_to_files(items = results['model_event_enums'], classNameSuffix = "ModelEvents", output_dir = f'src/datasources/{sql_config['service']}/enums/models')
+      write_items_to_files(items = results['model_event_enums'], classNameSuffix = "ModelEvents", output_dir = f'src/datasources/{sql_config['service']}/enums/modelevents')
       write_items_to_files(items = results['not_found_exceptions'], classNameSuffix = "NotFoundException", output_dir = f'src/datasources/{sql_config['service']}/exceptions')
       write_items_to_files(items = results['invalid_data_exceptions'], classNameSuffix = "InvalidDataException", output_dir = f'src/datasources/{sql_config['service']}/exceptions')
       write_items_to_files(items = results['processing_exceptions'], classNameSuffix = "ProcessingException", output_dir = f'src/datasources/{sql_config['service']}/exceptions')
