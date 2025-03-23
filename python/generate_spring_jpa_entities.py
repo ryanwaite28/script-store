@@ -1020,6 +1020,7 @@ def generate_datasource_config(service_name, package_prefix):
     return f"""\
 package {package_prefix}.configs;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Primary;
 import jakarta.persistence.EntityManagerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
