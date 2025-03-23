@@ -206,7 +206,7 @@ import {app_package_prefix}.utils.RequestParamsUtils;
 import {app_package_prefix}.domain.responses.PaginationResponse;
 import {package_prefix}.dto.searches.{class_name}SearchParams;
 import {package_prefix}.enums.errorcodes.{class_name}ErrorCodes;
-import {package_prefix}.enums.modelevents.{class_name}ErrorCodes;
+import {package_prefix}.enums.modelevents.{class_name}ModelEvents;
 import {package_prefix}.services.interfaces.{class_name}Service;
 import {package_prefix}.entities.{class_name}Entity;
 import {package_prefix}.dto.{class_name}Dto;
@@ -2009,7 +2009,6 @@ public class RequestParamsUtils {{
 
     public static final String FILED_QUERY_REGEX = "([a-z]+)\\|([\\w\\-\\s,\\|]+)";
     public static final String NON_VALUE_QUERY_REGEX = "(isNull|isNotNull|isTrue|isFalse)";
-
     public static final String SINGLE_QUERY_REGEX = "query<([\\w\\-]+)\\|([a-z]+)\\|([\\w\\-\\s,\\|]+)>";
     public static final String ANDLIST_REGEX = "and<((,?query<([\\w\\-]+)\\|([a-z]+)\\|([\\w\\-\\s,\\|]+)>)*)>";
     public static final String GLOBAL_OR_REGEX = "^or<(,?and<((,?query<([\\w\\-]+)\\|([a-z]+)\\|([\\w\\-\\s,\\|]+)>)*)>)*>$";
