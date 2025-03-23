@@ -1016,7 +1016,7 @@ def generate_datasource_config(service_name, package_prefix):
     # When specifying multiple datasources in a spring boot app, at least one needs the @Primary annotation
     # This is the one that will be used by default
     return f"""\
-package {package_prefix}.config.datasources;
+package {package_prefix}.configs;
 
 import org.springframework.context.annotation.Primary;
 import jakarta.persistence.EntityManagerFactory;
