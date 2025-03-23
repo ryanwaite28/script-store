@@ -1429,12 +1429,22 @@ public class CoerceUtils {{
     common_utils = f"""\
 package {package_prefix}.utils;
 
-import lombok.NonNull;
 import org.springframework.web.multipart.MultipartFile;
-
+import lombok.NonNull;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import jakarta.validation.constraints.NotNull;
+import java.lang.reflect.Field;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.time.Instant;
-import java.util.UUID;
+import java.time.LocalDateTime;
+import java.util.*;
 import java.util.function.Predicate;
+import java.util.regex.Matcher;
 
 public class CommonUtils {{
 
